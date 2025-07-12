@@ -1,0 +1,202 @@
+[
+  {
+    "city": "New York (JFK)",
+    "airport": "John F. Kennedy International Airport",
+    "iata": "JFK"
+  },
+  { 
+    "city": "Los Angeles",
+    "airport": "Los Angeles International Airport",
+    "iata": "LAX"
+  },
+  {
+    "city": "London (Heathrow)",
+    "airport": "Heathrow Airport",
+    "iata": "LHR"
+  },
+  {
+    "city": "Dubai",
+    "airport": "Dubai International Airport",
+    "iata": "DXB"
+  },
+  {
+    "city": "Singapore",
+    "airport": "Changi Airport",
+    "iata": "SIN"
+  },
+  {
+    "city": "Sydney",
+    "airport": "Kingsford Smith International Airport",
+    "iata": "SYD"
+  },
+  {
+    "city": "Toronto",
+    "airport": "Pearson International Airport",
+    "iata": "YYZ"
+  },
+  {
+    "city": "Frankfurt",
+    "airport": "Frankfurt Airport",
+    "iata": "FRA"
+  },
+  {
+    "city": "Paris (Charles de Gaulle)",
+    "airport": "Charles de Gaulle Airport",
+    "iata": "CDG"
+  },
+  {
+    "city": "Tokyo (Narita)",
+    "airport": "Narita International Airport",
+    "iata": "NRT"
+  },
+  {
+    "city": "Beijing",
+    "airport": "Beijing Capital International Airport",
+    "iata": "PEK"
+  },
+  {
+    "city": "Hong Kong",
+    "airport": "Hong Kong International Airport",
+    "iata": "HKG"
+  },
+  {
+    "city": "Hyderabad",
+    "airport": "Rajiv Gandhi International Airport",
+    "iata": "HYD"
+  },
+  {
+    "city": "Delhi",
+    "airport": "Indira Gandhi International Airport",
+    "iata": "DEL"
+  },
+  {
+    "city": "Mumbai",
+    "airport": "Chhatrapati Shivaji Maharaj International",
+    "iata": "BOM"
+  },
+  {
+    "city": "Bengaluru",
+    "airport": "Kempegowda International Airport",
+    "iata": "BLR"
+  },
+  {
+    "city": "Chennai",
+    "airport": "Chennai International Airport",
+    "iata": "MAA"
+  },
+  {
+    "city": "Kolkata",
+    "airport": "Netaji Subhas Chandra Bose International",
+    "iata": "CCU"
+  },
+  {
+    "city": "Ahmedabad",
+    "airport": "Sardar Vallabhbhai Patel International",
+    "iata": "AMD"
+  },
+  {
+    "city": "Pune",
+    "airport": "Pune Airport",
+    "iata": "PNQ"
+  },
+  {
+    "city": "Jaipur",
+    "airport": "Jaipur International Airport",
+    "iata": "JAI"
+  },
+  {
+    "city": "Kochi",
+    "airport": "Cochin International Airport",
+    "iata": "COK"
+  },
+  {
+    "city": "Lucknow",
+    "airport": "Chaudhary Charan Singh International Airport",
+    "iata": "LKO"
+  },
+  {
+    "city": "Goa",
+    "airport": "Goa International Airport",
+    "iata": "GOI"
+  },
+  {
+    "city": "Guwahati",
+    "airport": "Lokpriya Gopinath Bordoloi International",
+    "iata": "GAU"
+  },
+  {
+    "city": "Bhubaneswar",
+    "airport": "Biju Patnaik International Airport",
+    "iata": "BBI"
+  },
+  {
+    "city": "Vishakhapatnam",
+    "airport": "Visakhapatnam International Airport",
+    "iata": "VTZ"
+  },
+  {
+    "city": "Coimbatore",
+    "airport": "Coimbatore International Airport",
+    "iata": "CJB"
+  },
+  {
+    "city": "Nagpur",
+    "airport": "Dr. Babasaheb Ambedkar International",
+    "iata": "NAG"
+  },
+  {
+    "city": "Srinagar",
+    "airport": "Sheikh ul-Alam International Airport",
+    "iata": "SXR"
+  },
+  {
+    "city": "Amritsar",
+    "airport": "Sri Guru Ram Dass Jee International Airport",
+    "iata": "ATQ"
+  },
+  {
+    "city": "Chandigarh",
+    "airport": "Chandigarh Airport",
+    "iata": "IXC"
+  },
+  {
+    "city": "Trivandrum (Thiruvananthapuram)",
+    "airport": "Trivandrum International Airport",
+    "iata": "TRV"
+  },
+  {
+    "city": "Madurai",
+    "airport": "Madurai Airport",
+    "iata": "IXM"
+  },
+  {
+    "city": "Mangalore",
+    "airport": "Mangalore International Airport",
+    "iata": "IXE"
+  },
+  {
+    "city": "Patna",
+    "airport": "Jay Prakash Narayan Airport",
+    "iata": "PAT"
+  },
+  {
+    "city": "Raipur",
+    "airport": "Swami Vivekananda Airport",
+    "iata": "RPR"
+  },
+  {
+    "city": "Ranchi",
+    "airport": "Birsa Munda Airport",
+    "iata": "IXR"
+  },
+  {
+    "city": "Surat",
+    "airport": "Surat Airport",
+    "iata": "STV"
+  },
+  {
+    "city": "Varanasi",
+    "airport": "Lal Bahadur Shastri International Airport",
+    "iata": "VNS"
+  }
+]
