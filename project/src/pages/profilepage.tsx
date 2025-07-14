@@ -16,7 +16,7 @@ const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
 
   // Profile images
-  const staticBgImage = 'https://fileinfo.com/img/ss/xl/jpeg_43-2.jpg'; // Static default background image
+  const staticBgImage = 'src/components/Black and Red Futuristic Tech Review Youtube Banner.png'; // Static default background image
 
   // Form fields
   const [name, setName] = useState(userProfile?.name || '');

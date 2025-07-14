@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+//  const [filteredSuggestions, setFilteredSuggestions] = useState<any[]>([]);
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -15,7 +16,7 @@ import SalesPage from './pages/salesPage';
 import EditablePackage from './pages/editpackage';
 import AddPackage from './addpackage';
 import Home from './pages/duplicatetrail';
-import { Plane, Building2, Palmtree, Ship, Train, Bus, Car, CreditCard, MapPin, Shield, Users, Search, X,DollarSign ,HandCoins } from 'lucide-react';
+import { Plane, Building2, Palmtree, Ship, Train, Bus, Car, CreditCard, MapPin , HandCoins, Search, X , Users, Shield } from 'lucide-react';
 import airportsData from "../../iata_airports.json";
 import destinationsData from '../src/destinations.json';
 import TabPopup from '../src/pages/Tabpopup.tsx';
@@ -27,6 +28,8 @@ function App() {
 
   type Airport = { city: string; airport: string; iata: string };
   const [airports, setAirports] = useState<Airport[]>([]);
+  const [filteredSuggestions, setFilteredSuggestions] = useState<any[]>([]);
+
 
   const [travelLocations, setTravelLocations] = useState({
     flightsFrom: "",
@@ -42,17 +45,18 @@ function App() {
     cabsTo: "",
     visaDestination: "",
     insuranceDestination: "",
-    packageDestination: "",
+    currencyToBuy: "", // Added for ForexCard
+    amount: "", // Added for ForexCard
   });
 
   const [liveSearchInput, setLiveSearchInput] = useState<{ key: string; value: string } | null>(null);
   const [activeDropdownKey, setActiveDropdownKey] = useState<string | null>(null);
-  const [locationErrors, setLocationErrors] = useState<{[key: string]: string}>({}); // NEW: State for location-specific errors
-
+  const [locationErrors, setLocationErrors] = useState<{[key: string]: string}>({}); // State for location-specific errors
 
   const [travelDate, setTravelDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [departureDate, setDepartureDate] = useState("");
+  const [visaDate, setVisaDate] = useState('');
 
   const [showTravelerDropdown, setShowTravelerDropdown] = useState(false);
   const [adults, setAdults] = useState(1);
@@ -67,9 +71,13 @@ function App() {
   const [hotelCheckIn, setHotelCheckIn] = useState('');
   const [hotelCheckOut, setHotelCheckOut] = useState('');
   const [hotelPriceRange, setHotelPriceRange] = useState('');
-  const [visaDate, setVisaDate] = useState('');
+  
+  // New state to control button disabled state
+  const [isSearchButtonDisabled, setIsSearchButtonDisabled] = useState(true);
 
-  const [filteredSuggestions, setFilteredSuggestions] = useState<any[]>([]);
+  // New state for globally accessible form data
+  const [savedFormData, setSavedFormData] = useState<{[tab: string]: any}>({});
+
 
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -83,11 +91,11 @@ function App() {
     setAirports(airportsData);
   }, []);
 
-  // NEW: Function to validate if the current value in travelLocations[key] is valid
-  const validateLocation = (key: keyof typeof travelLocations, value: string, dataType: 'airport' | 'destination') => {
+  // Function to validate if the current value in travelLocations[key] is valid
+  const validateLocation = (key: keyof typeof travelLocations, value: string, dataType: 'airport' | 'destination'): boolean => {
     let isValid = false;
-    if (!value) { // If the field is empty, it might be valid (e.g., optional field) or an error if required. For now, empty is not valid if a selection is expected.
-      isValid = false;
+    if (!value.trim()) {
+      isValid = false; // Empty is not valid for required fields
     } else if (dataType === 'airport') {
       isValid = airports.some(airport => `${airport.city} - ${airport.airport} (${airport.iata})` === value);
     } else { // dataType === 'destination'
@@ -114,7 +122,7 @@ function App() {
     setLocationErrors(prev => ({ ...prev, [key]: "" }));
 
     // If a selection exists and user types, clear the selection
-    if (travelLocations[key] && !value.includes(travelLocations[key])) {
+    if (travelLocations[key] && !travelLocations[key].toLowerCase().includes(value.toLowerCase())) {
       setTravelLocations(prev => ({ ...prev, [key]: "" }));
     }
 
@@ -123,7 +131,7 @@ function App() {
     if (dataType === 'airport') {
       const filtered = airports
         .filter(airport =>
-          `${airport.city} ${airport.airport} ${airport.iata}`
+          `${airport.city} ${airport.airport} (${airport.iata})`
             .toLowerCase()
             .includes(value.toLowerCase())
         )
@@ -152,7 +160,7 @@ function App() {
     setLocationErrors(prev => ({ ...prev, [key]: "" })); // Clear error on successful selection
   };
 
-  // NEW: Handle blur event for input fields to validate on leaving the field
+  // Handle blur event for input fields to validate on leaving the field
   const handleInputBlur = (key: keyof typeof travelLocations, dataType: 'airport' | 'destination') => {
     if (activeDropdownKey === key) { // Only close dropdown if not actively selecting
         setActiveDropdownKey(null);
@@ -230,91 +238,195 @@ function App() {
 
   const [showInactive, setShowInactive] = useState(false);
 
-  // NEW: Centralized validation function for the entire form submission
-  const validateForm = () => {
+  // Centralized validation function for the entire form submission
+  const validateForm = (): boolean => {
     let isValid = true;
     const newErrors: {[key: string]: string} = {};
 
-    // Validate Flights From
-    if (activeTab === "Flights") {
-      if (!validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport')) {
-        newErrors.flightsFrom = "Please select a valid 'From' airport.";
-        isValid = false;
-      }
-      if (!validateLocation('flightsTo', travelLocations.flightsTo, 'airport')) {
-        newErrors.flightsTo = "Please select a valid 'To' airport.";
-        isValid = false;
-      }
-    }
-    // Add validation for other tabs similarly
-    if (activeTab === "Hotels") {
-        if (!validateLocation('hotelsDestination', travelLocations.hotelsDestination, 'destination')) {
-          newErrors.hotelsDestination = "Please select a valid destination.";
-          isValid = false;
+    // Helper to set error and mark form as invalid
+    const invalidate = (key: string, message: string) => {
+      newErrors[key] = message;
+      isValid = false;
+    };
+
+    // Helper to validate a date string
+    const isDateValid = (dateString: string, fieldName: string, min?: string, max?: string): boolean => {
+        if (!dateString) {
+            invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} is required.`);
+            return false;
         }
-    }
-    // if (activeTab === "Packages") {
-    //     if (!validateLocation('packageDestination', travelLocations.packageDestination, 'destination')) {
-    //       newErrors.packageDestination = "Please select a valid package destination.";
-    //       isValid = false;
-    //     }
-    // }
-    if (activeTab === "Cruise") {
+        const selected = new Date(dateString);
+        const todayNormalized = new Date();
+        todayNormalized.setHours(0, 0, 0, 0);
+
+        if (isNaN(selected.getTime())) {
+            invalidate(fieldName, `Invalid date format for ${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()}.`);
+            return false;
+        }
+        if (min && selected < new Date(min)) {
+            invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be before ${min}.`);
+            return false;
+        }
+        if (max && selected > new Date(max)) {
+            invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be after ${max}.`);
+            return false;
+        }
+        return true;
+    };
+
+
+    switch (activeTab) {
+      case "Flights":
+        if (!validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport')) {
+          invalidate('flightsFrom', "Please select a valid 'From' airport.");
+        }
+        if (!validateLocation('flightsTo', travelLocations.flightsTo, 'airport')) {
+          invalidate('flightsTo', "Please select a valid 'To' airport.");
+        }
+        // New validation: From and To airports should not be the same
+        if (travelLocations.flightsFrom && travelLocations.flightsTo && travelLocations.flightsFrom === travelLocations.flightsTo) {
+          invalidate('flightsTo', "'From' and 'To' airports cannot be the same.");
+        }
+
+        if (!isDateValid(departureDate, 'departureDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        if (tripType === "roundTrip") {
+            if (!isDateValid(returnDate, 'returnDate', departureDate, maxDate)) {
+                // Error already set by isDateValid
+            }
+        }
+        if (travelerError) { // Check if there's an error from the traveler dropdown
+            invalidate('travelers', travelerError);
+        }
+        if (totalTravelers === 0) {
+            invalidate('travelers', 'At least one traveler is required.');
+        }
+        break;
+
+      case "Hotels":
+        if (!validateLocation('hotelsDestination', travelLocations.hotelsDestination, 'destination')) {
+          invalidate('hotelsDestination', "Please select a valid destination.");
+        }
+        if (!isDateValid(hotelCheckIn, 'hotelCheckIn', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        if (!isDateValid(hotelCheckOut, 'hotelCheckOut', hotelCheckIn || minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        // Additional checks for Rooms/Adults/Children can be added if needed,
+        // but RoomGuestSelector handles its own internal validation.
+        break;
+
+      case "Cruise":
         if (!validateLocation('cruiseFrom', travelLocations.cruiseFrom, 'destination')) {
-          newErrors.cruiseFrom = "Please select a valid 'From' port.";
-          isValid = false;
+          invalidate('cruiseFrom', "Please select a valid 'From' port.");
         }
         if (!validateLocation('cruiseTo', travelLocations.cruiseTo, 'destination')) {
-          newErrors.cruiseTo = "Please select a valid 'To' port.";
-          isValid = false;
+          invalidate('cruiseTo', "Please select a valid 'To' port.");
         }
-    }
-    if (activeTab === "Trains") {
+        // New validation: From and To ports should not be the same
+        if (travelLocations.cruiseFrom && travelLocations.cruiseTo && travelLocations.cruiseFrom === travelLocations.cruiseTo) {
+          invalidate('cruiseTo', "'From' and 'To' ports cannot be the same.");
+        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      case "Trains":
         if (!validateLocation('trainsFrom', travelLocations.trainsFrom, 'destination')) {
-          newErrors.trainsFrom = "Please select a valid 'From' station.";
-          isValid = false;
+          invalidate('trainsFrom', "Please select a valid 'From' station.");
         }
         if (!validateLocation('trainsTo', travelLocations.trainsTo, 'destination')) {
-          newErrors.trainsTo = "Please select a valid 'To' station.";
-          isValid = false;
+          invalidate('trainsTo', "Please select a valid 'To' station.");
         }
-    }
-    if (activeTab === "Buses") {
+        // New validation: From and To stations should not be the same
+        if (travelLocations.trainsFrom && travelLocations.trainsTo && travelLocations.trainsFrom === travelLocations.trainsTo) {
+          invalidate('trainsTo', "'From' and 'To' stations cannot be the same.");
+        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      case "Buses":
         if (!validateLocation('busesFrom', travelLocations.busesFrom, 'destination')) {
-          newErrors.busesFrom = "Please select a valid 'Departure Bus Depo'.";
-          isValid = false;
+          invalidate('busesFrom', "Please select a valid 'Departure Bus Depo'.");
         }
         if (!validateLocation('busesTo', travelLocations.busesTo, 'destination')) {
-          newErrors.busesTo = "Please select a valid 'Arrival Bus Depo'.";
-          isValid = false;
+          invalidate('busesTo', "Please select a valid 'Arrival Bus Depo'.");
         }
-    }
-     if (activeTab === "Cabs") {
+        // New validation: From and To bus depos should not be the same
+        if (travelLocations.busesFrom && travelLocations.busesTo && travelLocations.busesFrom === travelLocations.busesTo) {
+          invalidate('busesTo', "'Departure' and 'Arrival' bus depos cannot be the same.");
+        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      case "Cabs":
         if (!validateLocation('cabsFrom', travelLocations.cabsFrom, 'destination')) {
-          newErrors.cabsFrom = "Please select a valid 'Pickup Point'.";
-          isValid = false;
+          invalidate('cabsFrom', "Please select a valid 'Pickup Point'.");
         }
         if (!validateLocation('cabsTo', travelLocations.cabsTo, 'destination')) {
-          newErrors.cabsTo = "Please select a valid 'Dropping Location'.";
-          isValid = false;
+          invalidate('cabsTo', "Please select a valid 'Dropping Location'.");
         }
-    }
-     if (activeTab === "Visa") {
+        // New validation: Pickup and Dropping locations should not be the same
+        if (travelLocations.cabsFrom && travelLocations.cabsTo && travelLocations.cabsFrom === travelLocations.cabsTo) {
+          invalidate('cabsTo', "'Pickup' and 'Dropping' locations cannot be the same.");
+        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      case "Visa":
         if (!validateLocation('visaDestination', travelLocations.visaDestination, 'destination')) {
-          newErrors.visaDestination = "Please select a valid 'Destination Country'.";
-          isValid = false;
+          invalidate('visaDestination', "Please select a valid 'Destination Country'.");
         }
-    }
-    if (activeTab === "Insurance") {
+        if (!isDateValid(visaDate, 'visaDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        if (!isDateValid(returnDate, 'returnDate', visaDate || minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      case "ForexCard":
+        if (!travelLocations.currencyToBuy.trim()) {
+          invalidate('currencyToBuy', 'Currency to Buy is required.');
+        }
+        if (!travelLocations.amount.trim() || isNaN(Number(travelLocations.amount))) {
+          invalidate('amount', 'Valid amount is required.');
+        }
+        break;
+
+      case "Insurance":
         if (!validateLocation('insuranceDestination', travelLocations.insuranceDestination, 'destination')) {
-          newErrors.insuranceDestination = "Please select a valid 'Destination'.";
-          isValid = false;
+          invalidate('insuranceDestination', "Please select a valid 'Destination'.");
         }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
+            // Error already set by isDateValid
+        }
+        break;
+
+      default:
+        // If no active tab or unrecognized tab, assume invalid or enable only if no specific inputs
+        isValid = false;
+        break;
     }
 
-    setLocationErrors(prev => ({...prev, ...newErrors})); // Merge new errors with existing ones
+    setLocationErrors(prev => ({...prev, ...newErrors}));
     return isValid;
   };
+
+  useEffect(() => {
+    // Re-validate the form whenever relevant states change
+    const isFormReady = validateForm();
+    setIsSearchButtonDisabled(!isFormReady);
+  }, [activeTab, travelLocations, departureDate, returnDate, hotelCheckIn, hotelCheckOut, visaDate, travelerError, totalTravelers, travelDate]);
 
 
   return (
@@ -355,7 +467,6 @@ function App() {
               {[
                 { name: 'Flights', icon: Plane },
                 { name: 'Hotels', icon: Building2 },
-                // { name: 'Packages', icon: Palmtree },
                 { name: 'Cruise', icon: Ship },
                 { name: 'Trains', icon: Train },
                 { name: 'Buses', icon: Bus },
@@ -416,7 +527,7 @@ function App() {
                           setFilteredSuggestions(airports.slice(0, 10));
                         }}
                         onChange={(e) => handleLocationInputChange(e, 'flightsFrom', 'airport')}
-                        onBlur={() => handleInputBlur('flightsFrom', 'airport')} // NEW: Add onBlur handler
+                        onBlur={() => handleInputBlur('flightsFrom', 'airport')}
                         readOnly={!!travelLocations.flightsFrom}
                       />
                       {activeDropdownKey === 'flightsFrom' && filteredSuggestions.length > 0 && (
@@ -426,7 +537,7 @@ function App() {
                               <li
                                 key={idx}
                                 className="px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                                onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsFrom')} // Use onMouseDown to prevent blur
+                                onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsFrom')}
                               >
                                 <div className="font-medium text-sm">
                                   {airport.city}, {airport.iata}
@@ -465,7 +576,7 @@ function App() {
                           setFilteredSuggestions(airports.slice(0, 10));
                         }}
                         onChange={(e) => handleLocationInputChange(e, 'flightsTo', 'airport')}
-                        onBlur={() => handleInputBlur('flightsTo', 'airport')} // NEW: Add onBlur handler
+                        onBlur={() => handleInputBlur('flightsTo', 'airport')}
                         readOnly={!!travelLocations.flightsTo}
                       />
                       {activeDropdownKey === 'flightsTo' && filteredSuggestions.length > 0 && (
@@ -701,9 +812,26 @@ function App() {
                         e.preventDefault(); // Prevent navigation if validation fails
                         alert("Please fix the errors in the form."); // Or use a more subtle notification
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                flightsFrom: travelLocations.flightsFrom,
+                                flightsTo: travelLocations.flightsTo,
+                                departureDate,
+                                returnDate: tripType === "roundTrip" ? returnDate : null,
+                                adults,
+                                children,
+                                infants,
+                                travelClass,
+                                tripType,
+                                fareType
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     <Search className="w-5 h-5" /> SEARCH
                   </button>
@@ -774,8 +902,7 @@ function App() {
                     />
                   </div>
                   <div className="relative">
-                    <label className="block text-sm text-gray-700 mb-1">Guests</label>
-                    <RoomGuestSelector activeTab={'Hotels'} onChange={(data) => console.log('Selected:', data)} />
+                    <RoomGuestSelector activeTab={'Hotels'} label="Rooms & Guests" onChange={(data) => console.log('Selected:', data)} />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-700 mb-1">Price Range</label>
@@ -807,79 +934,27 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                hotelsDestination: travelLocations.hotelsDestination,
+                                hotelCheckIn,
+                                hotelCheckOut,
+                                hotelPriceRange
+                                // RoomGuestSelector data is managed internally, if needed externally, pass it via state from RoomGuestSelector
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Search Hotels
                   </button>
                 </Link>
               </div>
             )}
-{/* 
-            {activeTab === "Packages" && (
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="relative">
-                  <label className="block text-sm text-gray-700 mb-2">Packages</label>
-                  <input
-                    type="text"
-                    className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.packageDestination ? 'border-red-500' : ''}`}
-                    placeholder="Destinations"
-                    value={travelLocations.packageDestination || (liveSearchInput?.key === 'packageDestination' ? liveSearchInput.value : "")}
-                    onClick={() => {
-                      setTravelLocations(prev => ({ ...prev, packageDestination: "" }));
-                      setLiveSearchInput({ key: 'packageDestination', value: "" });
-                      setActiveDropdownKey('packageDestination');
-                      setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
-                    }}
-                    onChange={(e) => handleLocationInputChange(e, 'packageDestination', 'destination')}
-                    onBlur={() => handleInputBlur('packageDestination', 'destination')}
-                    readOnly={!!travelLocations.packageDestination}
-                  />
-                  {activeDropdownKey === 'packageDestination' && filteredSuggestions.length > 0 && (
-                    <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
-                      {filteredSuggestions.map((dest: { city: string; country: string }, i) => (
-                        <li
-                          key={i}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={() => handleSuggestionSelect(dest.city, 'packageDestination')}
-                        >
-                          {dest.city}, {dest.country}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {locationErrors.packageDestination && <p className="text-red-500 text-xs mt-1">{locationErrors.packageDestination}</p>}
-                </div>
-                <div className="relative">
-                  <ValidatedDateInput
-                    label="Travel Date"
-                    value={travelDate}
-                    onChange={setTravelDate}
-                    min={minDate}
-                    max={maxDate}
-                  />
-                </div>
-                <RoomGuestSelector activeTab='Packages' label='Room, Adults, Children' onChange={(data) => console.log('Selected:', data)} />
-                <div >
-                  <Link to="/packages">
-                    <button id='search'
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
-                      onClick={(e) => {
-                        if (!validateForm()) {
-                          e.preventDefault();
-                          alert("Please fix the errors in the form.");
-                        } else {
-                          setActiveTab(null);
-                        }
-                      }}
-                    >
-                      Search Packages
-                    </button>
-                  </Link>
-                </div>
-              </div>
-            )} */}
 
             {activeTab === "Cruise" && (
               <div className="grid md:grid-cols-2 gap-6">
@@ -955,8 +1030,7 @@ function App() {
                   max={maxDate}
                 />
                 <div className="relative">
-                  <label className="block text-sm text-gray-700 mb-1">Guests</label>
-                  <RoomGuestSelector activeTab='Cruise' onChange={(data) => console.log('Selected:', data)} />
+                  <RoomGuestSelector activeTab='Cruise' label="Passengers & Type of Cruise" onChange={(data) => console.log('Selected:', data)} />
                 </div>
                 <Link to="/contact">
                   <button id='search'
@@ -966,11 +1040,22 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                cruiseFrom: travelLocations.cruiseFrom,
+                                cruiseTo: travelLocations.cruiseTo,
+                                travelDate
+                                // RoomGuestSelector data is managed internally, if needed externally, pass it via state
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
-                    Search Hotels
+                    Search Cruise
                   </button>
                 </Link>
               </div>
@@ -1058,9 +1143,20 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                trainsFrom: travelLocations.trainsFrom,
+                                trainsTo: travelLocations.trainsTo,
+                                travelDate
+                                // RoomGuestSelector data is managed internally, if needed externally, pass it via state
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Search Trains
                   </button>
@@ -1150,9 +1246,20 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                busesFrom: travelLocations.busesFrom,
+                                busesTo: travelLocations.busesTo,
+                                travelDate
+                                // RoomGuestSelector data is managed internally, if needed externally, pass it via state
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Search Buses
                   </button>
@@ -1242,9 +1349,20 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                cabsFrom: travelLocations.cabsFrom,
+                                cabsTo: travelLocations.cabsTo,
+                                travelDate
+                                // RoomGuestSelector data is managed internally, if needed externally, pass it via state
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Search Cabs
                   </button>
@@ -1326,9 +1444,20 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                visaDestination: travelLocations.visaDestination,
+                                visaDate,
+                                returnDate
+                                // Visa Type is managed internally, if needed externally, get from select element
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Apply for Visa
                   </button>
@@ -1338,11 +1467,55 @@ function App() {
 
             {activeTab === "ForexCard" && (
               <div className="grid md:grid-cols-2 gap-6">
-                <input className="border p-3 rounded w-full" placeholder="Currency to Buy" />
-                <input className="border p-3 rounded w-full" placeholder="Amount" />
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Currency to Buy</label>
+                  <input
+                      className={`border p-3 rounded w-full ${locationErrors.currencyToBuy ? 'border-red-500' : ''}`}
+                      placeholder="e.g., USD"
+                      value={travelLocations.currencyToBuy}
+                      onChange={(e) => {
+                          setTravelLocations(prev => ({ ...prev, currencyToBuy: e.target.value }));
+                          setLocationErrors(prev => ({ ...prev, currencyToBuy: '' }));
+                      }}
+                      onBlur={() => validateForm()}
+                  />
+                  {locationErrors.currencyToBuy && <p className="text-red-500 text-xs mt-1">{locationErrors.currencyToBuy}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Amount</label>
+                  <input
+                      type="number"
+                      className={`border p-3 rounded w-full ${locationErrors.amount ? 'border-red-500' : ''}`}
+                      placeholder="Enter amount"
+                      value={travelLocations.amount}
+                      onChange={(e) => {
+                          setTravelLocations(prev => ({ ...prev, amount: e.target.value }));
+                          setLocationErrors(prev => ({ ...prev, amount: '' }));
+                      }}
+                      onBlur={() => validateForm()}
+                  />
+                  {locationErrors.amount && <p className="text-red-500 text-xs mt-1">{locationErrors.amount}</p>}
+                </div>
                 <Link to="/contact">
                   <button id='search' className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
-                    onClick={() => setActiveTab(null)}>
+                    onClick={(e) => {
+                      if (!validateForm()) {
+                        e.preventDefault();
+                        alert("Please fix the errors in the form.");
+                      } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                currencyToBuy: travelLocations.currencyToBuy,
+                                amount: travelLocations.amount
+                            }
+                        }));
+                        setActiveTab(null);
+                      }
+                    }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
+                  >
                     Apply for Forex
                   </button>
                 </Link>
@@ -1400,9 +1573,18 @@ function App() {
                         e.preventDefault();
                         alert("Please fix the errors in the form.");
                       } else {
+                        // Save form data to global state
+                        setSavedFormData(prev => ({
+                            ...prev,
+                            [activeTab]: {
+                                insuranceDestination: travelLocations.insuranceDestination,
+                                travelDate
+                            }
+                        }));
                         setActiveTab(null);
                       }
                     }}
+                    disabled={isSearchButtonDisabled} // Disable button based on form validity
                   >
                     Apply for Insurance
                   </button>
