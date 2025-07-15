@@ -14,6 +14,7 @@ const ValidatedDateInput: React.FC<ValidatedDateInputProps> = ({
   value,
   onChange,
   min,
+  
   max,
   required = false,
 }) => {

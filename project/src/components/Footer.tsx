@@ -65,7 +65,7 @@ const Footer = () => {
             <ul className="space-y-2">
                 {['Maldives', 'Swiss Alps', 'Japan', 'Kenya Safari', 'Greek Islands', 'Iceland'].map((destination) => (
                 <li key={destination}>
-                  <a href={`/package/${destination}`} className="text-gray-300 hover:text-white transition-colors">
+                  <a href={`package/${destination}`} className="text-gray-300 hover:text-white transition-colors">
                     {destination}
                   </a>
                 </li>
