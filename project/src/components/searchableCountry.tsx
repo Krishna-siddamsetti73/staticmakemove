@@ -114,7 +114,7 @@ const SearchableCountrySelect: React.FC<SearchableCountrySelectProps> = ({
           className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent ${
             error ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-red-500'
           } ${disabled ? 'bg-gray-100' : 'bg-white'}`}
-          autoComplete="off"
+          autoComplete="on"
         />
       </div>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}

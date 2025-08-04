@@ -136,11 +136,15 @@ const Contact = () => {
         }
         break;
       case 'destination':
+        if (prefilledFields.has('destination')) {
+          break;}
+          else{
         if (!value) {
           error = 'Preferred destination is required.';
-        } else if (!allCountries.some(country => country.name === value)) {
-          error = 'Please select a valid country from the list.';
-        }
+        }}
+        //  else if (!allCountries.some(country => country.name === value)) {
+        //   error = 'Please select a valid country from the list.';
+        // }
         break;
       case 'travelDate':
         if (!value) {
@@ -170,6 +174,7 @@ const Contact = () => {
         break;
     }
     setErrors(prev => ({ ...prev, [name]: error }));
+   
     return error; 
   }, [allCountries]);
 
@@ -215,7 +220,11 @@ const Contact = () => {
                 break;
             case 'destination':
                 if (!value) error = 'Preferred destination is required.';
-                else if (!allCountries.some(country => country.name === value)) error = 'Please select a valid country from the list.';
+                else if (prefilledFields.has('destination')) {
+                    break; // Skip validation if prefilled
+                } else if (!allCountries.some(country => country.name === value)) {
+                    error = 'Please select a valid country from the list.';
+                }
                 break;
             case 'travelDate':
                 if (!value) {
@@ -242,6 +251,7 @@ const Contact = () => {
             default:
                 break;
         }
+        //  console.log(`Validation for  ${error}`);
         if (error) return false; 
     }
     return true; 

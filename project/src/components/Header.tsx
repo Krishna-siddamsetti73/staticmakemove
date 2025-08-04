@@ -160,7 +160,11 @@ useEffect(() => {
                 return (
                   <button
                     key={item.name}
-                    onClick={() => { setActiveTab(item.name); setIsMenuOpen(false); }}
+                    onClick={() => { if (item.name === "Help") {
+                          navigate("/contact");
+                        }else if(item.name==="Packages"){
+                          navigate("/packages");
+                        } setActiveTab(item.name); setIsMenuOpen(false); }}
                     className={`flex flex-col items-center p-2 rounded-lg ${
                       activeTab === item.name ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
                     }`}
