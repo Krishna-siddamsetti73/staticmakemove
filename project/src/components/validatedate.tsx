@@ -6,7 +6,9 @@ interface ValidatedDateInputProps {
   onChange: (value: string) => void;
   min: string;
   max: string;
-  required?: boolean;
+  required?: boolean; 
+  error?: string;
+  
 }
 
 const ValidatedDateInput: React.FC<ValidatedDateInputProps> = ({

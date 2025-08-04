@@ -57,7 +57,12 @@ const maxDate = `${maxyyyy}-12-31`;
       selectedDate,
       totalPrice
     });
-    navigate('/contact');
+    if(departureDate != null && departureDate !== '') {
+      navigate('/contact');
+    }
+    else {
+      alert('Please select the number of travelers and a departure date.');
+    }
   };
 
   const tabs = [

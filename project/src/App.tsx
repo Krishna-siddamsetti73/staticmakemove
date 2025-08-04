@@ -16,21 +16,34 @@ import AddPackage from './addpackage';
 import Home from './pages/duplicatetrail';
 import TabPopup from './pages/Tabpopup';
 import RoomGuestSelector from './components/dropdown';
-import ValidatedDateInput from './components/validatedate';
+import ValidatedDateInput from './components/validatedate'; // Assuming you've updated this component to accept 'error' prop
 
-import airportsData from "../../iata_airports.json"; 
-import destinationsData from './destinations.json'; 
+import airportsData from "../../iata_airports.json";
+import destinationsData from './destinations.json';
+import countriesData from '../src/components/countryandflags.json';
 
 import { Plane, Building2, Ship, Train, Bus, Car, CreditCard, HandCoins, Search, X, Users, Shield } from 'lucide-react';
 
 
-function AppContent() { 
-  const [activeTab, setActiveTab] = useState<string | null>("Flights"); 
+type CountryCurrency = {
+  name: string;
+  dial_code: string;
+  flag: string;
+  currency_name: string;
+  currency_symbol: string;
+};
+
+function AppContent() {
+  const [activeTab, setActiveTab] = useState<string | null>("Flights");
 
   type Airport = { city: string; airport: string; iata: string };
   const [airports, setAirports] = useState<Airport[]>([]);
   const [filteredSuggestions, setFilteredSuggestions] = useState<any[]>([]);
 
+  const [countryCurrencies, setCountryCurrencies] = useState<CountryCurrency[]>([]);
+  const [filteredCurrencySuggestions, setFilteredCurrencySuggestions] = useState<CountryCurrency[]>([]);
+  const [currencySearchInput, setCurrencySearchInput] = useState<string>("");
+  const currencyDropdownRef = useRef<HTMLDivElement>(null);
 
   const [travelLocations, setTravelLocations] = useState({
     flightsFrom: "",
@@ -54,34 +67,39 @@ function AppContent() {
   const [activeDropdownKey, setActiveDropdownKey] = useState<string | null>(null);
   const [locationErrors, setLocationErrors] = useState<{[key: string]: string}>({});
 
+  // NEW: State to track which fields have been touched
+  const [touchedFields, setTouchedFields] = useState<{[key: string]: boolean}>({});
+  // NEW: State to track if form submission was attempted
+  const [isSubmitAttempted, setIsSubmitAttempted] = useState(false);
+
   const [travelDate, setTravelDate] = useState('');
-  const [returnDate, setReturnDate] = useState('');
-const [departureDate, setDepartureDate] = useState<string>('');
+  const [returnDate, setReturnDate] = useState<string>('');
+  const [departureDate, setDepartureDate] = useState<string>('');
 
   const [visaDate, setVisaDate] = useState('');
 
   const [showTravelerDropdown, setShowTravelerDropdown] = useState(false);
   const [adults, setAdults] = useState(1);
-  const [numChildren, setNumChildren] = useState(0); 
+  const [numChildren, setNumChildren] = useState(0);
   const [infants, setInfants] = useState(0);
   const [travelClass, setTravelClass] = useState('Economy');
   const [tripType, setTripType] = useState("oneWay");
   const [travelerError, setTravelerError] = useState('');
 
-  const totalTravelers = adults + numChildren + infants; 
+  const totalTravelers = adults + numChildren + infants;
   const [fareType, setFareType] = useState("Regular");
   const [hotelCheckIn, setHotelCheckIn] = useState('');
   const [hotelCheckOut, setHotelCheckOut] = useState('');
   const [hotelPriceRange, setHotelPriceRange] = useState('');
-  
+
   const [isSearchButtonDisabled, setIsSearchButtonDisabled] = useState(true);
 
   const [savedFormData, setSavedFormData] = useState<{[tab: string]: any}>({});
 
-  const [showInactive, setShowInactive] = useState(false); 
+  const [showInactive, setShowInactive] = useState(false);
 
-  const location = useLocation(); 
-  const navigate = useNavigate(); 
+  const location = useLocation();
+  const navigate = useNavigate();
 
 
   const today = new Date();
@@ -94,26 +112,98 @@ const [departureDate, setDepartureDate] = useState<string>('');
 
   useEffect(() => {
     setAirports(airportsData);
+    setCountryCurrencies(countriesData as CountryCurrency[]);
   }, []);
 
   useEffect(() => {
-    setActiveTab(null); 
-  }, [location.pathname]); 
+    setActiveTab(null);
+    // NEW: Reset touched state and submit attempted state when route changes
+    setTouchedFields({});
+    setIsSubmitAttempted(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (activeTab !== "ForexCard") {
+      setTravelLocations(prev => ({ ...prev, currencyToBuy: "", amount: "" }));
+      setLocationErrors(prev => ({ ...prev, currencyToBuy: "", amount: "" }));
+      setCurrencySearchInput("");
+      setFilteredCurrencySuggestions([]);
+      // NEW: Reset touched for ForexCard fields if tab changes away
+      setTouchedFields(prev => {
+        const newTouched = { ...prev };
+        delete newTouched.currencyToBuy;
+        delete newTouched.amount;
+        return newTouched;
+      });
+    }
+     // NEW: When activeTab changes, reset touched fields related to previous tab's inputs
+     setTouchedFields({});
+     setIsSubmitAttempted(false);
+
+  }, [activeTab]);
 
 
   const validateLocation = (key: keyof typeof travelLocations, value: string, dataType: 'airport' | 'destination'): boolean => {
-    let isValid = false;
+    let isValid = true; // Start assuming valid for this field
+    let errorMessage = "";
+
     if (!value.trim()) {
+      errorMessage = `Please select a valid ${dataType === 'airport' ? 'airport' : 'location'} from the dropdown.`;
       isValid = false;
     } else if (dataType === 'airport') {
       isValid = airports.some(airport => `${airport.city} - ${airport.airport} (${airport.iata})` === value);
-    } else {
+      if (!isValid) {
+        errorMessage = "Please select a valid airport from the dropdown.";
+      }
+    } else { // dataType === 'destination'
       isValid = destinationsData.some(dest => dest.name === value);
+      if (!isValid) {
+        errorMessage = "Please select a valid location from the dropdown.";
+      }
+    }
+
+    // Specific check for same origin/destination for Flights, Cruise, Trains, Buses, Cabs
+    if (isValid) { // Only perform this check if the individual field itself is valid
+        if (key === 'flightsTo' && travelLocations.flightsFrom && travelLocations.flightsFrom === value) {
+            errorMessage = "'From' and 'To' airports cannot be the same.";
+            isValid = false;
+        } else if (key === 'flightsFrom' && travelLocations.flightsTo && travelLocations.flightsTo === value) { // Check 'flightsFrom' against 'flightsTo'
+            errorMessage = "'From' and 'To' airports cannot be the same.";
+            isValid = false;
+        }
+        else if (key === 'cruiseTo' && travelLocations.cruiseFrom && travelLocations.cruiseFrom === value) {
+            errorMessage = "'From' and 'To' ports cannot be the same.";
+            isValid = false;
+        } else if (key === 'cruiseFrom' && travelLocations.cruiseTo && travelLocations.cruiseTo === value) {
+            errorMessage = "'From' and 'To' ports cannot be the same.";
+            isValid = false;
+        }
+        else if (key === 'trainsTo' && travelLocations.trainsFrom && travelLocations.trainsFrom === value) {
+            errorMessage = "'From' and 'To' stations cannot be the same.";
+            isValid = false;
+        } else if (key === 'trainsFrom' && travelLocations.trainsTo && travelLocations.trainsTo === value) {
+            errorMessage = "'From' and 'To' stations cannot be the same.";
+            isValid = false;
+        }
+        else if (key === 'busesTo' && travelLocations.busesFrom && travelLocations.busesFrom === value) {
+            errorMessage = "'Departure' and 'Arrival' bus depos cannot be the same.";
+            isValid = false;
+        } else if (key === 'busesFrom' && travelLocations.busesTo && travelLocations.busesTo === value) {
+            errorMessage = "'Departure' and 'Arrival' bus depos cannot be the same.";
+            isValid = false;
+        }
+        else if (key === 'cabsTo' && travelLocations.cabsFrom && travelLocations.cabsFrom === value) {
+            errorMessage = "'Pickup' and 'Dropping' locations cannot be the same.";
+            isValid = false;
+        } else if (key === 'cabsFrom' && travelLocations.cabsTo && travelLocations.cabsTo === value) {
+            errorMessage = "'Pickup' and 'Dropping' locations cannot be the same.";
+            isValid = false;
+        }
     }
 
     setLocationErrors(prev => ({
       ...prev,
-      [key]: isValid ? "" : "Please select a valid location from the dropdown."
+      [key]: errorMessage
     }));
     return isValid;
   };
@@ -126,7 +216,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
     const value = e.target.value;
 
     setLiveSearchInput({ key, value });
-    setLocationErrors(prev => ({ ...prev, [key]: "" }));
+    setLocationErrors(prev => ({ ...prev, [key]: "" })); // Clear error as user types
+    setTouchedFields(prev => ({ ...prev, [key]: true })); // Mark as touched
 
     if (travelLocations[key] && !travelLocations[key].toLowerCase().includes(value.toLowerCase())) {
       setTravelLocations(prev => ({ ...prev, [key]: "" }));
@@ -157,20 +248,76 @@ const [departureDate, setDepartureDate] = useState<string>('');
 
   const handleSuggestionSelect = (
     selectedValue: string,
-    key: keyof typeof travelLocations
+    key: keyof typeof travelLocations,
+    dataType: 'airport' | 'destination'
   ) => {
     setTravelLocations(prev => ({ ...prev, [key]: selectedValue }));
     setLiveSearchInput(null);
     setFilteredSuggestions([]);
     setActiveDropdownKey(null);
-    setLocationErrors(prev => ({ ...prev, [key]: "" }));
+    setTouchedFields(prev => ({ ...prev, [key]: true })); // Mark as touched on select
+
+    validateLocation(key, selectedValue, dataType);
+    // Also validate the counterpart if it exists (e.g., flightsTo when flightsFrom is selected)
+    if (key === 'flightsFrom' && travelLocations.flightsTo) {
+        validateLocation('flightsTo', travelLocations.flightsTo, 'airport');
+    } else if (key === 'flightsTo' && travelLocations.flightsFrom) {
+        validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport');
+    }
+    else if (key === 'cruiseFrom' && travelLocations.cruiseTo) {
+        validateLocation('cruiseTo', travelLocations.cruiseTo, 'destination');
+    } else if (key === 'cruiseTo' && travelLocations.cruiseFrom) {
+        validateLocation('cruiseFrom', travelLocations.cruiseFrom, 'destination');
+    }
+    else if (key === 'trainsFrom' && travelLocations.trainsTo) {
+        validateLocation('trainsTo', travelLocations.trainsTo, 'destination');
+    } else if (key === 'trainsTo' && travelLocations.trainsFrom) {
+        validateLocation('trainsFrom', travelLocations.trainsFrom, 'destination');
+    }
+    else if (key === 'busesFrom' && travelLocations.busesTo) {
+        validateLocation('busesTo', travelLocations.busesTo, 'destination');
+    } else if (key === 'busesTo' && travelLocations.busesFrom) {
+        validateLocation('busesFrom', travelLocations.busesFrom, 'destination');
+    }
+    else if (key === 'cabsFrom' && travelLocations.cabsTo) {
+        validateLocation('cabsTo', travelLocations.cabsTo, 'destination');
+    } else if (key === 'cabsTo' && travelLocations.cabsFrom) {
+        validateLocation('cabsFrom', travelLocations.cabsFrom, 'destination');
+    }
   };
 
   const handleInputBlur = (key: keyof typeof travelLocations, dataType: 'airport' | 'destination') => {
     if (activeDropdownKey === key) {
         setActiveDropdownKey(null);
     }
+    setTouchedFields(prev => ({ ...prev, [key]: true })); // Mark as touched on blur
     validateLocation(key, travelLocations[key], dataType);
+    // Also validate the counterpart if it exists
+    if (key === 'flightsFrom' && travelLocations.flightsTo) {
+        validateLocation('flightsTo', travelLocations.flightsTo, 'airport');
+    } else if (key === 'flightsTo' && travelLocations.flightsFrom) {
+        validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport');
+    }
+    else if (key === 'cruiseFrom' && travelLocations.cruiseTo) {
+        validateLocation('cruiseTo', travelLocations.cruiseTo, 'destination');
+    } else if (key === 'cruiseTo' && travelLocations.cruiseFrom) {
+        validateLocation('cruiseFrom', travelLocations.cruiseFrom, 'destination');
+    }
+    else if (key === 'trainsFrom' && travelLocations.trainsTo) {
+        validateLocation('trainsTo', travelLocations.trainsTo, 'destination');
+    } else if (key === 'trainsTo' && travelLocations.trainsFrom) {
+        validateLocation('trainsFrom', travelLocations.trainsFrom, 'destination');
+    }
+    else if (key === 'busesFrom' && travelLocations.busesTo) {
+        validateLocation('busesTo', travelLocations.busesTo, 'destination');
+    } else if (key === 'busesTo' && travelLocations.busesFrom) {
+        validateLocation('busesFrom', travelLocations.busesFrom, 'destination');
+    }
+    else if (key === 'cabsFrom' && travelLocations.cabsTo) {
+        validateLocation('cabsTo', travelLocations.cabsTo, 'destination');
+    } else if (key === 'cabsTo' && travelLocations.cabsFrom) {
+        validateLocation('cabsFrom', travelLocations.cabsFrom, 'destination');
+    }
   };
 
 
@@ -183,11 +330,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
       flightsFrom: toVal,
       flightsTo: fromVal,
     }));
-    setLocationErrors(prev => ({
-      ...prev,
-      flightsFrom: "",
-      flightsTo: ""
-    }));
+    // Mark both fields as touched immediately after swap
+    setTouchedFields(prev => ({ ...prev, flightsFrom: true, flightsTo: true }));
+    // Re-validate after swap
+    validateLocation('flightsFrom', toVal, 'airport');
+    validateLocation('flightsTo', fromVal, 'airport');
   };
 
   const validateTravelers = (
@@ -204,6 +351,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
   };
 
   const incrementCounter = (type: 'adults' | 'children' | 'infants') => {
+    // Mark travelers field as touched when modifying counts
+    setTouchedFields(prev => ({ ...prev, travelers: true }));
     switch (type) {
       case 'adults':
         const newAdults = adults + 1;
@@ -211,7 +360,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
         validateTravelers(newAdults, infants);
         break;
       case 'children':
-        setNumChildren(numChildren + 1); 
+        setNumChildren(numChildren + 1);
         break;
       case 'infants':
         const newInfants = infants + 1;
@@ -222,6 +371,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
   };
 
   const decrementCounter = (type: 'adults' | 'children' | 'infants') => {
+    // Mark travelers field as touched when modifying counts
+    setTouchedFields(prev => ({ ...prev, travelers: true }));
     switch (type) {
       case 'adults':
         const newAdults = Math.max(1, adults - 1);
@@ -229,7 +380,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
         validateTravelers(newAdults, infants);
         break;
       case 'children':
-        setNumChildren(Math.max(0, numChildren - 1)); 
+        setNumChildren(Math.max(0, numChildren - 1));
         break;
       case 'infants':
         const newInfants = Math.max(0, infants - 1);
@@ -240,189 +391,238 @@ const [departureDate, setDepartureDate] = useState<string>('');
   };
 
   const validateForm = (): boolean => {
-    let isValid = true;
-    const newErrors: {[key: string]: string} = {};
+    let currentFormErrors: {[key: string]: string} = {};
+    let overallValid = true;
 
     const invalidate = (key: string, message: string) => {
-      newErrors[key] = message;
-      isValid = false;
+      currentFormErrors[key] = message;
+      overallValid = false;
     };
 
     const isDateValid = (dateString: string, fieldName: string, min?: string, max?: string): boolean => {
+        let dateIsValid = true;
         if (!dateString) {
             invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} is required.`);
-            return false;
-        }
-        const selected = new Date(dateString);
-        const todayNormalized = new Date();
-        todayNormalized.setHours(0, 0, 0, 0);
+            dateIsValid = false;
+        } else {
+            const selected = new Date(dateString);
+            const todayNormalized = new Date();
+            todayNormalized.setHours(0, 0, 0, 0);
 
-        if (isNaN(selected.getTime())) {
-            invalidate(fieldName, `Invalid date format for ${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()}.`);
-            return false;
+            if (isNaN(selected.getTime())) {
+                invalidate(fieldName, `Invalid date format for ${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()}.`);
+                dateIsValid = false;
+            }
+            if (min && selected < new Date(min)) {
+                invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be before ${min}.`);
+                dateIsValid = false;
+            }
+            if (max && selected > new Date(max)) {
+                invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be after ${max}.`);
+                dateIsValid = false;
+            }
         }
-        if (min && selected < new Date(min)) {
-            invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be before ${min}.`);
-            return false;
-        }
-        if (max && selected > new Date(max)) {
-            invalidate(fieldName, `${fieldName.replace(/([A-Z])/g, ' $1').toLowerCase()} cannot be after ${max}.`);
-            return false;
-        }
-        return true;
+        return dateIsValid;
     };
 
 
     switch (activeTab) {
       case "Flights":
-        if (!validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport')) {
-          invalidate('flightsFrom', "Please select a valid 'From' airport.");
-        }
-        if (!validateLocation('flightsTo', travelLocations.flightsTo, 'airport')) {
-          invalidate('flightsTo', "Please select a valid 'To' airport.");
-        }
+        if (!validateLocation('flightsFrom', travelLocations.flightsFrom, 'airport')) { overallValid = false; }
+        if (!validateLocation('flightsTo', travelLocations.flightsTo, 'airport')) { overallValid = false; }
         if (travelLocations.flightsFrom && travelLocations.flightsTo && travelLocations.flightsFrom === travelLocations.flightsTo) {
           invalidate('flightsTo', "'From' and 'To' airports cannot be the same.");
+          invalidate('flightsFrom', "'From' and 'To' airports cannot be the same.");
+          overallValid = false;
         }
 
-        if (!isDateValid(departureDate, 'departureDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!isDateValid(departureDate, 'departureDate', minDate, maxDate)) { overallValid = false; }
         if (tripType === "roundTrip") {
-            if (!isDateValid(returnDate, 'returnDate', departureDate, maxDate)) {
-                // Error already set by isDateValid
-            }
+            if (!isDateValid(returnDate, 'returnDate', departureDate || minDate, maxDate)) { overallValid = false; }
         }
-        if (travelerError) {
+        if (travelerError) { // This error is managed by validateTravelers, so just propagate
             invalidate('travelers', travelerError);
+            overallValid = false;
         }
         if (totalTravelers === 0) {
             invalidate('travelers', 'At least one traveler is required.');
+            overallValid = false;
         }
         break;
 
       case "Hotels":
-        if (!validateLocation('hotelsDestination', travelLocations.hotelsDestination, 'destination')) {
-          invalidate('hotelsDestination', "Please select a valid destination.");
-        }
-        if (!isDateValid(hotelCheckIn, 'hotelCheckIn', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
-        if (!isDateValid(hotelCheckOut, 'hotelCheckOut', hotelCheckIn || minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!validateLocation('hotelsDestination', travelLocations.hotelsDestination, 'destination')) { overallValid = false; }
+        if (!isDateValid(hotelCheckIn, 'hotelCheckIn', minDate, maxDate)) { overallValid = false; }
+        if (!isDateValid(hotelCheckOut, 'hotelCheckOut', hotelCheckIn || minDate, maxDate)) { overallValid = false; }
         break;
 
       case "Cruise":
-        if (!validateLocation('cruiseFrom', travelLocations.cruiseFrom, 'destination')) {
-          invalidate('cruiseFrom', "Please select a valid 'From' port.");
-        }
-        if (!validateLocation('cruiseTo', travelLocations.cruiseTo, 'destination')) {
-          invalidate('cruiseTo', "Please select a valid 'To' port.");
-        }
+        if (!validateLocation('cruiseFrom', travelLocations.cruiseFrom, 'destination')) { overallValid = false; }
+        if (!validateLocation('cruiseTo', travelLocations.cruiseTo, 'destination')) { overallValid = false; }
         if (travelLocations.cruiseFrom && travelLocations.cruiseTo && travelLocations.cruiseFrom === travelLocations.cruiseTo) {
           invalidate('cruiseTo', "'From' and 'To' ports cannot be the same.");
+          invalidate('cruiseFrom', "'From' and 'To' ports cannot be the same.");
+          overallValid = false;
         }
-        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) { overallValid = false; }
         break;
 
       case "Trains":
-        if (!validateLocation('trainsFrom', travelLocations.trainsFrom, 'destination')) {
-          invalidate('trainsFrom', "Please select a valid 'From' station.");
-        }
-        if (!validateLocation('trainsTo', travelLocations.trainsTo, 'destination')) {
-          invalidate('trainsTo', "Please select a valid 'To' station.");
-        }
+        if (!validateLocation('trainsFrom', travelLocations.trainsFrom, 'destination')) { overallValid = false; }
+        if (!validateLocation('trainsTo', travelLocations.trainsTo, 'destination')) { overallValid = false; }
         if (travelLocations.trainsFrom && travelLocations.trainsTo && travelLocations.trainsFrom === travelLocations.trainsTo) {
           invalidate('trainsTo', "'From' and 'To' stations cannot be the same.");
+          invalidate('trainsFrom', "'From' and 'To' stations cannot be the same.");
+          overallValid = false;
         }
-        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) { overallValid = false; }
         break;
 
       case "Buses":
-        if (!validateLocation('busesFrom', travelLocations.busesFrom, 'destination')) {
-          invalidate('busesFrom', "Please select a valid 'Departure Bus Depo'.");
-        }
-        if (!validateLocation('busesTo', travelLocations.busesTo, 'destination')) {
-          invalidate('busesTo', "Please select a valid 'Arrival Bus Depo'.");
-        }
+        if (!validateLocation('busesFrom', travelLocations.busesFrom, 'destination')) { overallValid = false; }
+        if (!validateLocation('busesTo', travelLocations.busesTo, 'destination')) { overallValid = false; }
         if (travelLocations.busesFrom && travelLocations.busesTo && travelLocations.busesFrom === travelLocations.busesTo) {
           invalidate('busesTo', "'Departure' and 'Arrival' bus depos cannot be the same.");
+          invalidate('busesFrom', "'Departure' and 'Arrival' bus depos cannot be the same.");
+          overallValid = false;
         }
-        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) { overallValid = false; }
         break;
 
       case "Cabs":
-        if (!validateLocation('cabsFrom', travelLocations.cabsFrom, 'destination')) {
-          invalidate('cabsFrom', "Please select a valid 'Pickup Point'.");
-        }
-        if (!validateLocation('cabsTo', travelLocations.cabsTo, 'destination')) {
-          invalidate('cabsTo', "Please select a valid 'Dropping Location'.");
-        }
+        if (!validateLocation('cabsFrom', travelLocations.cabsFrom, 'destination')) { overallValid = false; }
+        if (!validateLocation('cabsTo', travelLocations.cabsTo, 'destination')) { overallValid = false; }
         if (travelLocations.cabsFrom && travelLocations.cabsTo && travelLocations.cabsFrom === travelLocations.cabsTo) {
           invalidate('cabsTo', "'Pickup' and 'Dropping' locations cannot be the same.");
+          invalidate('cabsFrom', "'Pickup' and 'Dropping' locations cannot be the same.");
+          overallValid = false;
         }
-        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) { overallValid = false; }
         break;
 
       case "Visa":
-        if (!validateLocation('visaDestination', travelLocations.visaDestination, 'destination')) {
-          invalidate('visaDestination', "Please select a valid 'Destination Country'.");
-        }
-        if (!isDateValid(visaDate, 'visaDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
-        if (!isDateValid(returnDate, 'returnDate', visaDate || minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!validateLocation('visaDestination', travelLocations.visaDestination, 'destination')) { overallValid = false; }
+        if (!isDateValid(visaDate, 'visaDate', minDate, maxDate)) { overallValid = false; }
+        if (!isDateValid(returnDate, 'returnDate', visaDate || minDate, maxDate)) { overallValid = false; }
         break;
 
       case "ForexCard":
         if (!travelLocations.currencyToBuy.trim()) {
           invalidate('currencyToBuy', 'Currency to Buy is required.');
+          overallValid = false;
+        } else {
+            const isCurrencySelectedValid = countryCurrencies.some(c =>
+                `${c.currency_name} (${c.currency_symbol})` === travelLocations.currencyToBuy
+            );
+            if (!isCurrencySelectedValid) {
+                invalidate('currencyToBuy', "Please select a valid currency from the dropdown.");
+                overallValid = false;
+            }
         }
-        if (!travelLocations.amount.trim() || isNaN(Number(travelLocations.amount))) {
-          invalidate('amount', 'Valid amount is required.');
+        const amountNum = Number(travelLocations.amount);
+        if (!travelLocations.amount.trim() || isNaN(amountNum) || amountNum <= 0) {
+          invalidate('amount', 'Valid positive amount is required.');
+          overallValid = false;
         }
         break;
 
       case "Insurance":
-        if (!validateLocation('insuranceDestination', travelLocations.insuranceDestination, 'destination')) {
-          invalidate('insuranceDestination', "Please select a valid 'Destination'.");
-        }
-        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) {
-            // Error already set by isDateValid
-        }
+        if (!validateLocation('insuranceDestination', travelLocations.insuranceDestination, 'destination')) { overallValid = false; }
+        if (!isDateValid(travelDate, 'travelDate', minDate, maxDate)) { overallValid = false; }
         break;
 
       default:
-        isValid = false;
+        overallValid = false; // If no tab is active, or unknown tab, form is not valid
         break;
     }
 
-    setLocationErrors(prev => ({...prev, ...newErrors}));
-    return isValid;
+    // Update the locationErrors state with all found errors
+    setLocationErrors(currentFormErrors);
+
+    // Return the overall validity of the form
+    return overallValid;
   };
 
   useEffect(() => {
-    const isFormReady = validateForm();
-    setIsSearchButtonDisabled(!isFormReady);
-  }, [activeTab, travelLocations, departureDate, returnDate, hotelCheckIn, hotelCheckOut, visaDate, travelerError, totalTravelers, travelDate, adults, numChildren, infants]);
+    // This useEffect will run validation whenever relevant state changes.
+    // However, errors will only be SHOWN if fields are touched or submit attempted.
+    const formIsValid = validateForm();
+    // The button should be disabled if the form is NOT valid (regardless of touched state)
+    setIsSearchButtonDisabled(!formIsValid);
+  }, [
+    activeTab,
+    travelLocations.flightsFrom, travelLocations.flightsTo,
+    travelLocations.hotelsDestination,
+    travelLocations.cruiseFrom, travelLocations.cruiseTo,
+    travelLocations.trainsFrom, travelLocations.trainsTo,
+    travelLocations.busesFrom, travelLocations.busesTo,
+    travelLocations.cabsFrom, travelLocations.cabsTo,
+    travelLocations.visaDestination,
+    travelLocations.insuranceDestination,
+    travelLocations.currencyToBuy, travelLocations.amount,
+    departureDate, returnDate, hotelCheckIn, hotelCheckOut, visaDate,
+    travelerError, adults, numChildren, infants // No need for totalTravelers explicitly if its components are here
+  ]);
 
+  // Handler for currency search input
+  const handleCurrencySearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCurrencySearchInput(value);
+    setTravelLocations(prev => ({ ...prev, currencyToBuy: "" }));
+    setLocationErrors(prev => ({ ...prev, currencyToBuy: "" }));
+    setTouchedFields(prev => ({ ...prev, currencyToBuy: true })); // Mark as touched
+
+    if (value.trim() === "") {
+      setFilteredCurrencySuggestions(countryCurrencies.slice(0, 5));
+    } else {
+      const filtered = countryCurrencies.filter(c =>
+        c.currency_name.toLowerCase().includes(value.toLowerCase()) ||
+        c.currency_symbol.toLowerCase().includes(value.toLowerCase()) ||
+        c.name.toLowerCase().includes(value.toLowerCase())
+      ).slice(0, 5);
+      setFilteredCurrencySuggestions(filtered);
+    }
+  };
+
+  // Handler for currency selection from dropdown
+  const handleCurrencySelect = (currency: CountryCurrency) => {
+    const selectedCurrencyString = `${currency.currency_name} (${currency.currency_symbol})`;
+    setTravelLocations(prev => ({
+      ...prev,
+      currencyToBuy: selectedCurrencyString
+    }));
+    setCurrencySearchInput(selectedCurrencyString);
+    setFilteredCurrencySuggestions([]);
+    setLocationErrors(prev => ({ ...prev, currencyToBuy: "" }));
+    setTouchedFields(prev => ({ ...prev, currencyToBuy: true })); // Mark as touched
+
+    // Re-validate the amount field if it has a value, to show error if invalid
+    if (travelLocations.amount) {
+        // You might want to call a specific validation for amount here or just let the main useEffect trigger it
+        validateForm(); // This will re-run full validation
+    }
+  };
+
+  const getSelectedCurrencySymbol = (): string => {
+    const selectedCurrencyString = travelLocations.currencyToBuy;
+    if (selectedCurrencyString) {
+      const match = selectedCurrencyString.match(/\((.*?)\)/);
+      return match ? match[1] : '';
+    }
+    return '';
+  };
+
+
+  // Function to determine if an error should be shown for a field
+  const shouldShowError = (fieldName: string) => {
+      return (touchedFields[fieldName] || isSubmitAttempted) && locationErrors[fieldName];
+  };
 
   return (
     <div className="min-h-screen">
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab && ( // Only render TabPopup if activeTab is not null
+      {activeTab && (
         <TabPopup activeTab={activeTab} setActiveTab={setActiveTab}>
           <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 mb-8">
             <img
@@ -493,7 +693,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                   <div className="relative flex-1 min-w-48">
                     <label className="block text-sm text-gray-600 mb-1">From</label>
                     <input
-                      className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.flightsFrom ? 'border-red-500' : ''}`}
+                      className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('flightsFrom') ? 'border-red-500' : ''}`}
                       placeholder="From (City or Airport)"
                       value={travelLocations.flightsFrom || (liveSearchInput?.key === 'flightsFrom' ? liveSearchInput.value : "")}
                       onClick={() => {
@@ -501,10 +701,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                         setLiveSearchInput({ key: 'flightsFrom', value: "" });
                         setActiveDropdownKey('flightsFrom');
                         setFilteredSuggestions(airports.slice(0, 10));
+                        setTouchedFields(prev => ({ ...prev, flightsFrom: true })); // Mark as touched on click
                       }}
                       onChange={(e) => handleLocationInputChange(e, 'flightsFrom', 'airport')}
                       onBlur={() => handleInputBlur('flightsFrom', 'airport')}
-                      readOnly={!!travelLocations.flightsFrom}
+                      readOnly={!!travelLocations.flightsFrom && activeDropdownKey !== 'flightsFrom'}
                     />
                     {activeDropdownKey === 'flightsFrom' && filteredSuggestions.length > 0 && (
                       <div className="absolute z-10 bg-white border w-full max-h-72 overflow-auto shadow-lg rounded-lg mt-1">
@@ -513,7 +714,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                             <li
                               key={idx}
                               className="px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                              onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsFrom')}
+                              onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsFrom', 'airport')}
                             >
                               <div className="font-medium text-sm">
                                 {airport.city}, {airport.iata}
@@ -526,7 +727,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                         </ul>
                       </div>
                     )}
-                    {locationErrors.flightsFrom && <p className="text-red-500 text-xs mt-1">{locationErrors.flightsFrom}</p>}
+                    {shouldShowError('flightsFrom') && <p className="text-red-500 text-xs mt-1">{locationErrors.flightsFrom}</p>}
                   </div>
                 </div>
 
@@ -542,7 +743,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                   <label className="block text-sm text-gray-600 mb-1">To</label>
                   <div className="relative">
                     <input
-                      className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.flightsTo ? 'border-red-500' : ''}`}
+                      className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('flightsTo') ? 'border-red-500' : ''}`}
                       placeholder="To (City or Airport)"
                       value={travelLocations.flightsTo || (liveSearchInput?.key === 'flightsTo' ? liveSearchInput.value : "")}
                       onClick={() => {
@@ -550,10 +751,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                         setLiveSearchInput({ key: 'flightsTo', value: "" });
                         setActiveDropdownKey('flightsTo');
                         setFilteredSuggestions(airports.slice(0, 10));
+                        setTouchedFields(prev => ({ ...prev, flightsTo: true })); // Mark as touched on click
                       }}
                       onChange={(e) => handleLocationInputChange(e, 'flightsTo', 'airport')}
                       onBlur={() => handleInputBlur('flightsTo', 'airport')}
-                      readOnly={!!travelLocations.flightsTo}
+                      readOnly={!!travelLocations.flightsTo && activeDropdownKey !== 'flightsTo'}
                     />
                     {activeDropdownKey === 'flightsTo' && filteredSuggestions.length > 0 && (
                       <div className="absolute z-10 bg-white border w-full max-h-72 overflow-auto shadow-lg rounded-lg mt-1">
@@ -562,7 +764,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                             <li
                               key={idx}
                               className="px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                              onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsTo')}
+                              onMouseDown={() => handleSuggestionSelect(`${airport.city} - ${airport.airport} (${airport.iata})`, 'flightsTo', 'airport')}
                             >
                               <div className="font-medium text-sm">
                                 {airport.city}, {airport.iata}
@@ -575,7 +777,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                         </ul>
                       </div>
                     )}
-                    {locationErrors.flightsTo && <p className="text-red-500 text-xs mt-1">{locationErrors.flightsTo}</p>}
+                    {shouldShowError('flightsTo') && <p className="text-red-500 text-xs mt-1">{locationErrors.flightsTo}</p>}
                   </div>
                 </div>
 
@@ -584,9 +786,13 @@ const [departureDate, setDepartureDate] = useState<string>('');
                   <ValidatedDateInput
                     label="Departure Date"
                     value={departureDate}
-                    onChange={setDepartureDate}
+                    onChange={(date) => {
+                        setDepartureDate(date);
+                        setTouchedFields(prev => ({ ...prev, departureDate: true }));
+                    }}
                     min={minDate}
                     max={maxDate}
+                    error={shouldShowError('departureDate') ? locationErrors.departureDate : ''}
                   />
                 </div>
 
@@ -596,9 +802,13 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     <ValidatedDateInput
                       label="Return Date"
                       value={returnDate}
-                      onChange={setReturnDate}
+                      onChange={(date) => {
+                          setReturnDate(date);
+                          setTouchedFields(prev => ({ ...prev, returnDate: true }));
+                      }}
                       min={departureDate}
                       max={maxDate}
+                      error={shouldShowError('returnDate') ? locationErrors.returnDate : ''}
                     />
                   </div>
                 )}
@@ -610,8 +820,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     <div className="relative">
                       <Users className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                       <button
-                        onClick={() => setShowTravelerDropdown(!showTravelerDropdown)}
-                        className="w-full pl-10 pr-4 py-3 border rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:bg-gray-50"
+                        onClick={() => {
+                            setShowTravelerDropdown(!showTravelerDropdown);
+                            setTouchedFields(prev => ({ ...prev, travelers: true })); // Mark as touched on button click
+                        }}
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:bg-gray-50 ${shouldShowError('travelers') ? 'border-red-500' : ''}`}
                       >
                         {totalTravelers} Traveler{totalTravelers !== 1 ? 's' : ''}, {travelClass}
                       </button>
@@ -627,14 +840,10 @@ const [departureDate, setDepartureDate] = useState<string>('');
                             </div>
                             <div className="flex items-center gap-3">
                               <button
-                                onClick={() => decrementCounter('adults')}
-                                disabled={adults <= 1}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center ${adults <= 1
-                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                                  }`}
+                                onClick={() => incrementCounter('adults')}
+                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
                               >
-                                −
+                                +
                               </button>
                               <input
                                 type="number"
@@ -643,15 +852,21 @@ const [departureDate, setDepartureDate] = useState<string>('');
                                   const value = Math.max(1, parseInt(e.target.value) || 1);
                                   setAdults(value);
                                   validateTravelers(value, infants);
+                                  setTouchedFields(prev => ({ ...prev, travelers: true }));
                                 }}
+                                onBlur={() => setTouchedFields(prev => ({ ...prev, travelers: true }))}
                                 className="w-12 text-center font-medium border rounded px-1 py-1"
                                 min="1"
                               />
                               <button
-                                onClick={() => incrementCounter('adults')}
-                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
+                                onClick={() => decrementCounter('adults')}
+                                disabled={adults <= 1}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center ${adults <= 1
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                  }`}
                               >
-                                +
+                                −
                               </button>
                             </div>
                           </div>
@@ -663,30 +878,32 @@ const [departureDate, setDepartureDate] = useState<string>('');
                             </div>
                             <div className="flex items-center gap-3">
                               <button
+                                onClick={() => incrementCounter('children')}
+                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
+                              >
+                                +
+                              </button>
+                              <input
+                                type="number"
+                                value={numChildren}
+                                onChange={(e) => {
+                                  const value = Math.max(0, parseInt(e.target.value) || 0);
+                                  setNumChildren(value);
+                                  setTouchedFields(prev => ({ ...prev, travelers: true }));
+                                }}
+                                onBlur={() => setTouchedFields(prev => ({ ...prev, travelers: true }))}
+                                className="w-12 text-center font-medium border rounded px-1 py-1"
+                                min="0"
+                              />
+                              <button
                                 onClick={() => decrementCounter('children')}
-                                disabled={numChildren <= 0} 
-                                className={`w-8 h-8 rounded-full flex items-center justify-center ${numChildren <= 0 
+                                disabled={numChildren <= 0}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center ${numChildren <= 0
                                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                     : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                                   }`}
                               >
                                 −
-                              </button>
-                              <input
-                                type="number"
-                                value={numChildren} 
-                                onChange={(e) => {
-                                  const value = Math.max(0, parseInt(e.target.value) || 0);
-                                  setNumChildren(value); 
-                                }}
-                                className="w-12 text-center font-medium border rounded px-1 py-1"
-                                min="0"
-                              />
-                              <button
-                                onClick={() => incrementCounter('children')}
-                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
-                              >
-                                +
                               </button>
                             </div>
                           </div>
@@ -698,6 +915,25 @@ const [departureDate, setDepartureDate] = useState<string>('');
                             </div>
                             <div className="flex items-center gap-3">
                               <button
+                                onClick={() => incrementCounter('infants')}
+                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
+                              >
+                                +
+                              </button>
+                              <input
+                                type="number"
+                                value={infants}
+                                onChange={(e) => {
+                                  const value = Math.max(0, parseInt(e.target.value) || 0);
+                                  setInfants(value);
+                                  validateTravelers(adults, value);
+                                  setTouchedFields(prev => ({ ...prev, travelers: true }));
+                                }}
+                                onBlur={() => setTouchedFields(prev => ({ ...prev, travelers: true }))}
+                                className="w-12 text-center font-medium border rounded px-1 py-1"
+                                min="0"
+                              />
+                              <button
                                 onClick={() => decrementCounter('infants')}
                                 disabled={infants <= 0}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center ${infants <= 0
@@ -707,23 +943,6 @@ const [departureDate, setDepartureDate] = useState<string>('');
                               >
                                 −
                               </button>
-                              <input
-                                type="number"
-                                value={infants}
-                                onChange={(e) => {
-                                  const value = Math.max(0, parseInt(e.target.value) || 0);
-                                  setInfants(value);
-                                  validateTravelers(adults, value);
-                                }}
-                                className="w-12 text-center font-medium border rounded px-1 py-1"
-                                min="0"
-                              />
-                              <button
-                                onClick={() => incrementCounter('infants')}
-                                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center"
-                              >
-                                +
-                              </button>
                             </div>
                           </div>
 
@@ -732,12 +951,18 @@ const [departureDate, setDepartureDate] = useState<string>('');
                               {travelerError}
                             </div>
                           )}
+                          {shouldShowError('travelers') && <p className="text-red-500 text-xs mt-1">{locationErrors.travelers}</p>}
+
 
                           <div className="pt-4 border-t">
                             <label className="block text-sm font-medium mb-2">Class</label>
                             <select
                               value={travelClass}
-                              onChange={(e) => setTravelClass(e.target.value)}
+                              onChange={(e) => {
+                                  setTravelClass(e.target.value);
+                                  setTouchedFields(prev => ({ ...prev, travelClass: true }));
+                              }}
+                              onBlur={() => setTouchedFields(prev => ({ ...prev, travelClass: true }))}
                               className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
                               <option value="Economy">Economy</option>
@@ -771,7 +996,10 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <div className="flex flex-wrap gap-4">
                   {["Regular", "Student", "Senior Citizen", "Armed Forces", "Doctor and Nurses"].map((fare) => (
                   <label key={fare} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="fareType" value={fare} checked={fareType === fare} onChange={(e) => setFareType(e.target.value)} className="w-4 h-4 text-blue-600" />
+                      <input type="radio" name="fareType" value={fare} checked={fareType === fare} onChange={(e) => {
+                        setFareType(e.target.value);
+                        setTouchedFields(prev => ({ ...prev, fareType: true }));
+                      }} className="w-4 h-4 text-blue-600" />
                       <div>
                         <div className="text-sm font-medium">{fare}</div>
                       </div>
@@ -783,16 +1011,15 @@ const [departureDate, setDepartureDate] = useState<string>('');
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true); // Mark submission attempted
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       flightsFrom: travelLocations.flightsFrom,
                       flightsTo: travelLocations.flightsTo,
                       departureDate,
                       returnDate: tripType === "roundTrip" ? returnDate : null,
                       adults,
-                      numChildren, 
+                      numChildren,
                       infants,
                       travelClass,
                       tripType,
@@ -800,7 +1027,12 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    // Alert only if there are actual visible errors after validation
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -819,7 +1051,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                   <label className="block text-sm text-gray-700 mb-1">Destination</label>
                   <input
                     type="text"
-                    className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.hotelsDestination ? 'border-red-500' : ''}`}
+                    className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('hotelsDestination') ? 'border-red-500' : ''}`}
                     placeholder="City or Property"
                     value={travelLocations.hotelsDestination || (liveSearchInput?.key === 'hotelsDestination' ? liveSearchInput.value : "")}
                     onClick={() => {
@@ -827,10 +1059,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       setLiveSearchInput({ key: 'hotelsDestination', value: "" });
                       setActiveDropdownKey('hotelsDestination');
                       setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                      setTouchedFields(prev => ({ ...prev, hotelsDestination: true }));
                     }}
                     onChange={(e) => handleLocationInputChange(e, 'hotelsDestination', 'destination')}
                     onBlur={() => handleInputBlur('hotelsDestination', 'destination')}
-                    readOnly={!!travelLocations.hotelsDestination}
+                    readOnly={!!travelLocations.hotelsDestination && activeDropdownKey !== 'hotelsDestination'}
                   />
                   {activeDropdownKey === 'hotelsDestination' && filteredSuggestions.length > 0 && (
                     <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -838,14 +1071,14 @@ const [departureDate, setDepartureDate] = useState<string>('');
                         <li
                           key={i}
                           className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={() => handleSuggestionSelect(dest.city, 'hotelsDestination')}
+                          onMouseDown={() => handleSuggestionSelect(dest.city, 'hotelsDestination', 'destination')}
                         >
                           {dest.city}, {dest.country}
                         </li>
                       ))}
                     </ul>
                   )}
-                  {locationErrors.hotelsDestination && <p className="text-red-500 text-xs mt-1">{locationErrors.hotelsDestination}</p>}
+                  {shouldShowError('hotelsDestination') && <p className="text-red-500 text-xs mt-1">{locationErrors.hotelsDestination}</p>}
                 </div>
 
                 {/* Check-in / Check-out */}
@@ -858,18 +1091,24 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       if (hotelCheckOut && date >= hotelCheckOut) {
                         setHotelCheckOut('');
                       }
+                      setTouchedFields(prev => ({ ...prev, hotelCheckIn: true }));
                     }}
                     min={minDate}
                     max={maxDate}
+                    error={shouldShowError('hotelCheckIn') ? locationErrors.hotelCheckIn : ''}
                   />
                 </div>
                 <div>
                   <ValidatedDateInput
                     label="Check-out Date"
                     value={hotelCheckOut}
-                    onChange={setHotelCheckOut}
+                    onChange={(date) => {
+                      setHotelCheckOut(date);
+                      setTouchedFields(prev => ({ ...prev, hotelCheckOut: true }));
+                    }}
                     min={hotelCheckIn || minDate}
                     max={maxDate}
+                    error={shouldShowError('hotelCheckOut') ? locationErrors.hotelCheckOut : ''}
                   />
                 </div>
                 <div className="relative">
@@ -882,8 +1121,12 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     min={0}
                     max={5000}
                     step={500}
-                    value={Number(hotelPriceRange)} 
-                    onChange={(e) => setHotelPriceRange(e.target.value)}
+                    value={Number(hotelPriceRange)}
+                    onChange={(e) => {
+                      setHotelPriceRange(e.target.value);
+                      setTouchedFields(prev => ({ ...prev, hotelPriceRange: true }));
+                    }}
+                    onBlur={() => setTouchedFields(prev => ({ ...prev, hotelPriceRange: true }))}
                     className="w-full accent-blue-600"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -900,9 +1143,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       hotelsDestination: travelLocations.hotelsDestination,
                       hotelCheckIn,
@@ -911,7 +1153,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -927,7 +1173,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1">From Port</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.cruiseFrom ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('cruiseFrom') ? 'border-red-500' : ''}`}
                   placeholder="Boarding Port"
                   value={travelLocations.cruiseFrom || (liveSearchInput?.key === 'cruiseFrom' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -935,10 +1181,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'cruiseFrom', value: "" });
                     setActiveDropdownKey('cruiseFrom');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, cruiseFrom: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'cruiseFrom', 'destination')}
                   onBlur={() => handleInputBlur('cruiseFrom', 'destination')}
-                  readOnly={!!travelLocations.cruiseFrom}
+                  readOnly={!!travelLocations.cruiseFrom && activeDropdownKey !== 'cruiseFrom'}
                 />
                 {activeDropdownKey === 'cruiseFrom' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -946,20 +1193,20 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cruiseFrom')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cruiseFrom', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.cruiseFrom && <p className="text-red-500 text-xs mt-1">{locationErrors.cruiseFrom}</p>}
+                {shouldShowError('cruiseFrom') && <p className="text-red-500 text-xs mt-1">{locationErrors.cruiseFrom}</p>}
               </div>
               <div className="relative">
                 <label className="block text-sm text-gray-700 mb-1">To port</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.cruiseTo ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('cruiseTo') ? 'border-red-500' : ''}`}
                   placeholder="Boarding Port"
                   value={travelLocations.cruiseTo || (liveSearchInput?.key === 'cruiseTo' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -967,10 +1214,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'cruiseTo', value: "" });
                     setActiveDropdownKey('cruiseTo');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, cruiseTo: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'cruiseTo', 'destination')}
                   onBlur={() => handleInputBlur('cruiseTo', 'destination')}
-                  readOnly={!!travelLocations.cruiseTo}
+                  readOnly={!!travelLocations.cruiseTo && activeDropdownKey !== 'cruiseTo'}
                 />
                 {activeDropdownKey === 'cruiseTo' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -978,21 +1226,25 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cruiseTo')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cruiseTo', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.cruiseTo && <p className="text-red-500 text-xs mt-1">{locationErrors.cruiseTo}</p>}
+                {shouldShowError('cruiseTo') && <p className="text-red-500 text-xs mt-1">{locationErrors.cruiseTo}</p>}
               </div>
               <ValidatedDateInput
                 label="Travel Date"
                 value={travelDate}
-                onChange={setTravelDate}
+                onChange={(date) => {
+                    setTravelDate(date);
+                    setTouchedFields(prev => ({ ...prev, travelDate: true }));
+                }}
                 min={minDate}
                 max={maxDate}
+                error={shouldShowError('travelDate') ? locationErrors.travelDate : ''}
               />
               <div className="relative">
                 <RoomGuestSelector activeTab='Cruise' label="Passengers & Type of Cruise" onChange={(data) => console.log('Selected:', data)} />
@@ -1000,9 +1252,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       cruiseFrom: travelLocations.cruiseFrom,
                       cruiseTo: travelLocations.cruiseTo,
@@ -1010,7 +1261,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1026,7 +1281,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1">From Station</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.trainsFrom ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('trainsFrom') ? 'border-red-500' : ''}`}
                   placeholder="Boarding Station"
                   value={travelLocations.trainsFrom || (liveSearchInput?.key === 'trainsFrom' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1034,10 +1289,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'trainsFrom', value: "" });
                     setActiveDropdownKey('trainsFrom');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, trainsFrom: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'trainsFrom', 'destination')}
                   onBlur={() => handleInputBlur('trainsFrom', 'destination')}
-                  readOnly={!!travelLocations.trainsFrom}
+                  readOnly={!!travelLocations.trainsFrom && activeDropdownKey !== 'trainsFrom'}
                 />
                 {activeDropdownKey === 'trainsFrom' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1045,20 +1301,20 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'trainsFrom')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'trainsFrom', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.trainsFrom && <p className="text-red-500 text-xs mt-1">{locationErrors.trainsFrom}</p>}
+                {shouldShowError('trainsFrom') && <p className="text-red-500 text-xs mt-1">{locationErrors.trainsFrom}</p>}
               </div>
               <div className="relative">
                 <label className="block text-sm text-gray-700 mb-1">To Station</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.trainsTo ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('trainsTo') ? 'border-red-500' : ''}`}
                   placeholder="Boarding Station"
                   value={travelLocations.trainsTo || (liveSearchInput?.key === 'trainsTo' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1066,10 +1322,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'trainsTo', value: "" });
                     setActiveDropdownKey('trainsTo');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, trainsTo: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'trainsTo', 'destination')}
                   onBlur={() => handleInputBlur('trainsTo', 'destination')}
-                  readOnly={!!travelLocations.trainsTo}
+                  readOnly={!!travelLocations.trainsTo && activeDropdownKey !== 'trainsTo'}
                 />
                 {activeDropdownKey === 'trainsTo' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1077,29 +1334,32 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'trainsTo')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'trainsTo', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.trainsTo && <p className="text-red-500 text-xs mt-1">{locationErrors.trainsTo}</p>}
+                {shouldShowError('trainsTo') && <p className="text-red-500 text-xs mt-1">{locationErrors.trainsTo}</p>}
               </div>
               <ValidatedDateInput
                 label="Travel Date"
                 value={travelDate}
-                onChange={setTravelDate}
+                onChange={(date) => {
+                    setTravelDate(date);
+                    setTouchedFields(prev => ({ ...prev, travelDate: true }));
+                }}
                 min={minDate}
                 max={maxDate}
+                error={shouldShowError('travelDate') ? locationErrors.travelDate : ''}
               />
               <RoomGuestSelector activeTab='Trains' label='Passengers and Type of Coach' onChange={(data) => console.log('Selected:', data)} />
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       trainsFrom: travelLocations.trainsFrom,
                       trainsTo: travelLocations.trainsTo,
@@ -1107,7 +1367,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1123,7 +1387,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1">Departure Bus Depo</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.busesFrom ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('busesFrom') ? 'border-red-500' : ''}`}
                   placeholder="Boarding Bus Depo"
                   value={travelLocations.busesFrom || (liveSearchInput?.key === 'busesFrom' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1131,10 +1395,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'busesFrom', value: "" });
                     setActiveDropdownKey('busesFrom');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, busesFrom: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'busesFrom', 'destination')}
                   onBlur={() => handleInputBlur('busesFrom', 'destination')}
-                  readOnly={!!travelLocations.busesFrom}
+                  readOnly={!!travelLocations.busesFrom && activeDropdownKey !== 'busesFrom'}
                 />
                 {activeDropdownKey === 'busesFrom' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1142,20 +1407,20 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'busesFrom')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'busesFrom', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.busesFrom && <p className="text-red-500 text-xs mt-1">{locationErrors.busesFrom}</p>}
+                {shouldShowError('busesFrom') && <p className="text-red-500 text-xs mt-1">{locationErrors.busesFrom}</p>}
               </div>
               <div className="relative">
                 <label className="block text-sm text-gray-700 mb-1">Arrival Bus Depo</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.busesTo ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('busesTo') ? 'border-red-500' : ''}`}
                   placeholder="Arrival Bus Depo"
                   value={travelLocations.busesTo || (liveSearchInput?.key === 'busesTo' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1163,10 +1428,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'busesTo', value: "" });
                     setActiveDropdownKey('busesTo');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, busesTo: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'busesTo', 'destination')}
                   onBlur={() => handleInputBlur('busesTo', 'destination')}
-                  readOnly={!!travelLocations.busesTo}
+                  readOnly={!!travelLocations.busesTo && activeDropdownKey !== 'busesTo'}
                 />
                 {activeDropdownKey === 'busesTo' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1174,29 +1440,32 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'busesTo')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'busesTo', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.busesTo && <p className="text-red-500 text-xs mt-1">{locationErrors.busesTo}</p>}
+                {shouldShowError('busesTo') && <p className="text-red-500 text-xs mt-1">{locationErrors.busesTo}</p>}
               </div>
               <ValidatedDateInput
                 label="Travel Date"
                 value={travelDate}
-                onChange={setTravelDate}
+                onChange={(date) => {
+                    setTravelDate(date);
+                    setTouchedFields(prev => ({ ...prev, travelDate: true }));
+                }}
                 min={minDate}
                 max={maxDate}
+                error={shouldShowError('travelDate') ? locationErrors.travelDate : ''}
               />
               <RoomGuestSelector activeTab='Buses' label='Passengers and Type of Bus' onChange={(data) => console.log('Selected:', data)} />
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       busesFrom: travelLocations.busesFrom,
                       busesTo: travelLocations.busesTo,
@@ -1204,7 +1473,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1220,7 +1493,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1">Pickup Point</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.cabsFrom ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('cabsFrom') ? 'border-red-500' : ''}`}
                   placeholder="Pickup Location"
                   value={travelLocations.cabsFrom || (liveSearchInput?.key === 'cabsFrom' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1228,10 +1501,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'cabsFrom', value: "" });
                     setActiveDropdownKey('cabsFrom');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, cabsFrom: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'cabsFrom', 'destination')}
                   onBlur={() => handleInputBlur('cabsFrom', 'destination')}
-                  readOnly={!!travelLocations.cabsFrom}
+                  readOnly={!!travelLocations.cabsFrom && activeDropdownKey !== 'cabsFrom'}
                 />
                 {activeDropdownKey === 'cabsFrom' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1239,20 +1513,20 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cabsFrom')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cabsFrom', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.cabsFrom && <p className="text-red-500 text-xs mt-1">{locationErrors.cabsFrom}</p>}
+                {shouldShowError('cabsFrom') && <p className="text-red-500 text-xs mt-1">{locationErrors.cabsFrom}</p>}
               </div>
               <div className="relative">
                 <label className="block text-sm text-gray-700 mb-1">Dropping Location</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.cabsTo ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('cabsTo') ? 'border-red-500' : ''}`}
                   placeholder="Dropping Location"
                   value={travelLocations.cabsTo || (liveSearchInput?.key === 'cabsTo' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1260,10 +1534,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'cabsTo', value: "" });
                     setActiveDropdownKey('cabsTo');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, cabsTo: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'cabsTo', 'destination')}
                   onBlur={() => handleInputBlur('cabsTo', 'destination')}
-                  readOnly={!!travelLocations.cabsTo}
+                  readOnly={!!travelLocations.cabsTo && activeDropdownKey !== 'cabsTo'}
                 />
                 {activeDropdownKey === 'cabsTo' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1271,29 +1546,32 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cabsTo')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'cabsTo', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.cabsTo && <p className="text-red-500 text-xs mt-1">{locationErrors.cabsTo}</p>}
+                {shouldShowError('cabsTo') && <p className="text-red-500 text-xs mt-1">{locationErrors.cabsTo}</p>}
               </div>
               <ValidatedDateInput
                 label="Travel Date"
                 value={travelDate}
-                onChange={setTravelDate}
+                onChange={(date) => {
+                    setTravelDate(date);
+                    setTouchedFields(prev => ({ ...prev, travelDate: true }));
+                }}
                 min={minDate}
                 max={maxDate}
+                error={shouldShowError('travelDate') ? locationErrors.travelDate : ''}
               />
               <RoomGuestSelector activeTab='Cabs' label='Passengers and Type of Cab' onChange={(data) => console.log('Selected:', data)} />
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       cabsFrom: travelLocations.cabsFrom,
                       cabsTo: travelLocations.cabsTo,
@@ -1301,7 +1579,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1317,7 +1599,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1">Select Destination</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.visaDestination ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('visaDestination') ? 'border-red-500' : ''}`}
                   placeholder="Destination Country"
                   value={travelLocations.visaDestination || (liveSearchInput?.key === 'visaDestination' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1325,10 +1607,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'visaDestination', value: "" });
                     setActiveDropdownKey('visaDestination');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, visaDestination: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'visaDestination', 'destination')}
                   onBlur={() => handleInputBlur('visaDestination', 'destination')}
-                  readOnly={!!travelLocations.visaDestination}
+                  readOnly={!!travelLocations.visaDestination && activeDropdownKey !== 'visaDestination'}
                 />
                 {activeDropdownKey === 'visaDestination' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1336,36 +1619,47 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'visaDestination')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'visaDestination', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.visaDestination && <p className="text-red-500 text-xs mt-1">{locationErrors.visaDestination}</p>}
+                {shouldShowError('visaDestination') && <p className="text-red-500 text-xs mt-1">{locationErrors.visaDestination}</p>}
               </div>
               <div className="relative">
                 <ValidatedDateInput
                   label="Visa Date"
                   value={visaDate}
-                  onChange={setVisaDate}
+                  onChange={(date) => {
+                      setVisaDate(date);
+                      setTouchedFields(prev => ({ ...prev, visaDate: true }));
+                  }}
                   min={minDate}
                   max={maxDate}
+                  error={shouldShowError('visaDate') ? locationErrors.visaDate : ''}
                 />
               </div>
               <div className="relative">
                 <ValidatedDateInput
                   label="Return Date"
                   value={returnDate}
-                  onChange={setReturnDate}
+                  onChange={(date) => {
+                      setReturnDate(date);
+                      setTouchedFields(prev => ({ ...prev, returnDate: true }));
+                  }}
                   min={visaDate || minDate}
                   max={maxDate}
+                  error={shouldShowError('returnDate') ? locationErrors.returnDate : ''}
                 />
               </div>
               <div className="relative">
                 <label className="block text-sm text-gray-700 mb-1">Visa Type</label>
-                <select className="border p-3 rounded w-full">
+                <select className="border p-3 rounded w-full"
+                    onChange={() => setTouchedFields(prev => ({ ...prev, visaType: true }))}
+                    onBlur={() => setTouchedFields(prev => ({ ...prev, visaType: true }))}
+                >
                   <option disabled >Visa Type</option>
                   <option>Tourist Visa</option>
                   <option>Business Visa</option>
@@ -1380,9 +1674,8 @@ const [departureDate, setDepartureDate] = useState<string>('');
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       visaDestination: travelLocations.visaDestination,
                       visaDate,
@@ -1390,7 +1683,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1402,47 +1699,113 @@ const [departureDate, setDepartureDate] = useState<string>('');
 
           {activeTab === "ForexCard" && (
             <div className="grid md:grid-cols-2 gap-6">
-              <div>
+              <div className="relative" ref={currencyDropdownRef}>
                 <label className="block text-sm text-gray-700 mb-1">Currency to Buy</label>
                 <input
-                    className={`border p-3 rounded w-full ${locationErrors.currencyToBuy ? 'border-red-500' : ''}`}
-                    placeholder="e.g., USD"
-                    value={travelLocations.currencyToBuy}
-                    onChange={(e) => {
-                        setTravelLocations(prev => ({ ...prev, currencyToBuy: e.target.value }));
-                        setLocationErrors(prev => ({ ...prev, currencyToBuy: '' }));
+                    className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('currencyToBuy') ? 'border-red-500' : ''}`}
+                    placeholder="Search Currency (e.g., USD, Dollar)"
+                    value={currencySearchInput}
+                    onChange={handleCurrencySearchInputChange}
+                    onClick={() => {
+                      setTouchedFields(prev => ({ ...prev, currencyToBuy: true }));
+                      // On click, if input is empty, show initial suggestions
+                      if (!currencySearchInput) {
+                        setFilteredCurrencySuggestions(countryCurrencies.slice(0, 5));
+                      }
                     }}
-                    onBlur={() => validateForm()}
+                    onFocus={() => {
+                      if (!currencySearchInput) {
+                        setFilteredCurrencySuggestions(countryCurrencies.slice(0, 5));
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouchedFields(prev => ({ ...prev, currencyToBuy: true })); // Mark as touched on blur
+                      // Allow a small delay to handle click on suggestion before blur
+                      setTimeout(() => {
+                        const selectedCurrencyString = travelLocations.currencyToBuy;
+                        const isCurrentlySelected = selectedCurrencyString && selectedCurrencyString.includes(currencySearchInput);
+                        if (!isCurrentlySelected && currencySearchInput.trim() !== "") {
+                            setLocationErrors(prev => ({ ...prev, currencyToBuy: "Please select a valid currency from the dropdown." }));
+                            setCurrencySearchInput("");
+                            setTravelLocations(prev => ({ ...prev, currencyToBuy: "" }));
+                        } else if (!travelLocations.currencyToBuy.trim()) {
+                            setLocationErrors(prev => ({ ...prev, currencyToBuy: "Currency to Buy is required." }));
+                        }
+                        setFilteredCurrencySuggestions([]);
+                      }, 100);
+                    }}
                 />
-                {locationErrors.currencyToBuy && <p className="text-red-500 text-xs mt-1">{locationErrors.currencyToBuy}</p>}
+                {filteredCurrencySuggestions.length > 0 && (
+                  <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded-lg mt-1">
+                    {filteredCurrencySuggestions.map((currency: CountryCurrency, i) => (
+                      <li
+                        key={i}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                        onMouseDown={() => handleCurrencySelect(currency)}
+                      >
+                        <img src={currency.flag} alt={`${currency.name} flag`} className="w-5 h-auto" />
+                        <span>{currency.currency_name} ({currency.currency_symbol})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {shouldShowError('currencyToBuy') && <p className="text-red-500 text-xs mt-1">{locationErrors.currencyToBuy}</p>}
               </div>
               <div>
                 <label className="block text-sm text-gray-700 mb-1">Amount</label>
-                <input
-                    type="number"
-                    className={`border p-3 rounded w-full ${locationErrors.amount ? 'border-red-500' : ''}`}
-                    placeholder="Enter amount"
-                    value={travelLocations.amount}
-                    onChange={(e) => {
-                        setTravelLocations(prev => ({ ...prev, amount: e.target.value }));
-                        setLocationErrors(prev => ({ ...prev, amount: '' }));
-                    }}
-                    onBlur={() => validateForm()}
-                />
-                {locationErrors.amount && <p className="text-red-500 text-xs mt-1">{locationErrors.amount}</p>}
+                <div className="relative">
+                  <input
+                      type="number"
+                      className={`border p-3 rounded w-full ${shouldShowError('amount') ? 'border-red-500' : ''}`}
+                      placeholder="Enter amount"
+                      value={travelLocations.amount}
+                      onChange={(e) => {
+                          const value = e.target.value;
+                          setTouchedFields(prev => ({ ...prev, amount: true })); // Mark as touched
+                          if (value === "" || (Number(value) > 0 && !isNaN(Number(value)))) {
+                              setTravelLocations(prev => ({ ...prev, amount: value }));
+                              setLocationErrors(prev => ({ ...prev, amount: '' }));
+                          } else if (Number(value) <= 0 && value !== "") {
+                              setLocationErrors(prev => ({ ...prev, amount: 'Amount must be a positive number.' }));
+                          }
+                      }}
+                      onBlur={() => {
+                          setTouchedFields(prev => ({ ...prev, amount: true })); // Mark as touched on blur
+                          const amountNum = Number(travelLocations.amount);
+                          if (!travelLocations.amount.trim()) {
+                              setLocationErrors(prev => ({ ...prev, amount: 'Amount is required.' }));
+                          } else if (isNaN(amountNum) || amountNum <= 0) {
+                              setLocationErrors(prev => ({ ...prev, amount: 'Amount must be a positive number.' }));
+                          } else {
+                              setLocationErrors(prev => ({ ...prev, amount: '' }));
+                          }
+                      }}
+                      disabled={!travelLocations.currencyToBuy}
+                      min="1"
+                  />
+                  {getSelectedCurrencySymbol() && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+                          {getSelectedCurrencySymbol()}
+                      </span>
+                  )}
+                </div>
+                {shouldShowError('amount') && <p className="text-red-500 text-xs mt-1">{locationErrors.amount}</p>}
               </div>
               <button id='search' className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       currencyToBuy: travelLocations.currencyToBuy,
                       amount: travelLocations.amount
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1458,7 +1821,7 @@ const [departureDate, setDepartureDate] = useState<string>('');
                 <label className="block text-sm text-gray-700 mb-1"> Destination</label>
                 <input
                   type="text"
-                  className={`border p-3 rounded w-full cursor-pointer bg-white ${locationErrors.insuranceDestination ? 'border-red-500' : ''}`}
+                  className={`border p-3 rounded w-full cursor-pointer bg-white ${shouldShowError('insuranceDestination') ? 'border-red-500' : ''}`}
                   placeholder="Destination (City or Country)"
                   value={travelLocations.insuranceDestination || (liveSearchInput?.key === 'insuranceDestination' ? liveSearchInput.value : "")}
                   onClick={() => {
@@ -1466,10 +1829,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
                     setLiveSearchInput({ key: 'insuranceDestination', value: "" });
                     setActiveDropdownKey('insuranceDestination');
                     setFilteredSuggestions(destinationsData.slice(0, 10).map(d => ({ city: d.name, country: d.code })));
+                    setTouchedFields(prev => ({ ...prev, insuranceDestination: true }));
                   }}
                   onChange={(e) => handleLocationInputChange(e, 'insuranceDestination', 'destination')}
                   onBlur={() => handleInputBlur('insuranceDestination', 'destination')}
-                  readOnly={!!travelLocations.insuranceDestination}
+                  readOnly={!!travelLocations.insuranceDestination && activeDropdownKey !== 'insuranceDestination'}
                 />
                 {activeDropdownKey === 'insuranceDestination' && filteredSuggestions.length > 0 && (
                   <ul className="absolute z-10 bg-white border w-full max-h-48 overflow-auto shadow-lg">
@@ -1477,37 +1841,44 @@ const [departureDate, setDepartureDate] = useState<string>('');
                       <li
                         key={i}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleSuggestionSelect(dest.city, 'insuranceDestination')}
+                        onMouseDown={() => handleSuggestionSelect(dest.city, 'insuranceDestination', 'destination')}
                       >
                         {dest.city}, {dest.country}
                       </li>
                     ))}
                   </ul>
                 )}
-                {locationErrors.insuranceDestination && <p className="text-red-500 text-xs mt-1">{locationErrors.insuranceDestination}</p>}
+                {shouldShowError('insuranceDestination') && <p className="text-red-500 text-xs mt-1">{locationErrors.insuranceDestination}</p>}
               </div>
               <div className='relative'>
                 <ValidatedDateInput
                   label="Travel Date"
                   value={travelDate}
-                  onChange={setTravelDate}
+                  onChange={(date) => {
+                      setTravelDate(date);
+                      setTouchedFields(prev => ({ ...prev, travelDate: true }));
+                  }}
                   min={minDate}
                   max={maxDate}
+                  error={shouldShowError('travelDate') ? locationErrors.travelDate : ''}
                 />
               </div>
               <button id='search'
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg flex items-center justify-center gap-2"
                 onClick={() => {
-                  if (!validateForm()) {
-                    alert("Please fix the errors in the form.");
-                  } else {
+                  setIsSubmitAttempted(true);
+                  if (validateForm()) {
                     const currentTabSearchData = {
                       insuranceDestination: travelLocations.insuranceDestination,
                       travelDate
                     };
                     setSavedFormData(prev => ({ ...prev, [activeTab!]: currentTabSearchData }));
                     navigate('/contact', { state: { formData: currentTabSearchData, tab: activeTab } });
-                    setActiveTab(null); // Close popup immediately
+                    setActiveTab(null);
+                  } else {
+                    if (Object.values(locationErrors).some(error => error !== "") || travelerError) {
+                      alert("Please fix the errors in the form before searching.");
+                    }
                   }
                 }}
                 disabled={isSearchButtonDisabled}
@@ -1537,12 +1908,11 @@ const [departureDate, setDepartureDate] = useState<string>('');
   );
 }
 
-// This is the new top-level App component that uses Router
 function App() {
   return (
     <PackageProvider>
-      <Router> {/* Router is now at the top level */}
-        <AppContent /> {/* AppContent is rendered as a child of Router */}
+      <Router>
+        <AppContent />
       </Router>
     </PackageProvider>
   );
