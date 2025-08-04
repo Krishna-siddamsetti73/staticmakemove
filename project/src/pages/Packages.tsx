@@ -46,7 +46,13 @@ const Packages = () => {
     { id: 'all', label: 'All Packages', count: packages.length },
     { id: 'beach', label: 'Beach & Islands', count: packages.filter(p => p.category === 'beach').length },
     { id: 'adventure', label: 'Adventure', count: packages.filter(p => p.category === 'adventure').length },
-    { id: 'cultural', label: 'Cultural', count: packages.filter(p => p.category === 'cultural').length }
+    { id: 'cultural', label: 'Cultural', count: packages.filter(p => p.category === 'cultural').length },
+    { id: 'family', label: 'Family', count: packages.filter(p => p.category === 'family').length },
+    { id: 'romantic', label: 'Romantic', count: packages.filter(p => p.category === 'romantic').length },
+    { id: 'wildlife', label: 'Wildlife', count: packages.filter(p => p.category === 'wildlife').length },
+    { id: 'heritage', label: 'Heritage', count: packages.filter(p => p.category === 'heritage').length },
+    { id: 'pilgrimage', label: 'Pilgrimage', count: packages.filter(p => p.category === 'pilgrimage').length },
+    { id: 'hill-station', label: 'Hill Station', count: packages.filter(p => p.category === 'hill-station').length }
   ];
 
   const toggleDifficulty = (difficulty: string) => {

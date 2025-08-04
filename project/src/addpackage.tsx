@@ -22,7 +22,7 @@ const monthRanges = [
   'Other',
 ];
 
-const difficulties = ['Easy', 'Medium', 'Hard', 'Extreme', 'Other'];
+const difficulties = ["Easy", "Moderate", "Challenging"];
 
 const categories = ['Adventure', 'Beach', 'Family', 'Romantic', 'Wildlife', 'Heritage', 'Pilgrimage', 'Hill Station', 'Other'];
 
@@ -51,6 +51,7 @@ const AddPackage = () => {
     excluded: [] as string[],
     highlights: [] as string[],
     itinerary: [] as { day: number; title: string; description: string; activities: string[] }[],
+    status: 'active'
   });
 
   const [otherInputs, setOtherInputs] = useState({ category: '', bestTime: '', difficulty: '', groupSize: '' });
@@ -440,7 +441,7 @@ const AddPackage = () => {
     const allFields = [
       'title', 'description', 'image', 'location', 'duration', 'price', 'rating',
       'category', 'bestTime', 'difficulty', 'groupSize', 'images', 'included',
-      'excluded', 'highlights', 'itinerary'
+      'excluded', 'highlights', 'itinerary','status'
     ];
 
     let formHasErrors = false;

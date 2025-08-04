@@ -21,6 +21,7 @@ import ValidatedDateInput from './components/validatedate'; // Assuming you've u
 import airportsData from "../../iata_airports.json";
 import destinationsData from './destinations.json';
 import countriesData from '../src/components/countryandflags.json';
+import ChatBot from "../src/components/chatbot";
 
 import { Plane, Building2, Ship, Train, Bus, Car, CreditCard, HandCoins, Search, X, Users, Shield } from 'lucide-react';
 
@@ -142,7 +143,17 @@ function AppContent() {
 
   }, [activeTab]);
 
-
+const headerconp= [
+              { name: 'Flights', icon: Plane },
+              { name: 'Hotels', icon: Building2 },
+              { name: 'Cruise', icon: Ship },
+              { name: 'Trains', icon: Train },
+              { name: 'Buses', icon: Bus },
+              { name: 'Cabs', icon: Car },
+              { name: 'Visa', icon: CreditCard },
+              { name: 'ForexCard', icon: HandCoins },
+              { name: 'Insurance', icon: Shield },
+            ]
   const validateLocation = (key: keyof typeof travelLocations, value: string, dataType: 'airport' | 'destination'): boolean => {
     let isValid = true; // Start assuming valid for this field
     let errorMessage = "";
@@ -640,29 +651,30 @@ function AppContent() {
           </div>
 
           <div className="flex flex-wrap justify-center gap-4 mb-8">
-            {[
-              { name: 'Flights', icon: Plane },
-              { name: 'Hotels', icon: Building2 },
-              { name: 'Cruise', icon: Ship },
-              { name: 'Trains', icon: Train },
-              { name: 'Buses', icon: Bus },
-              { name: 'Cabs', icon: Car },
-              { name: 'Visa', icon: CreditCard },
-              { name: 'ForexCard', icon: HandCoins },
-              { name: 'Insurance', icon: Shield },
-            ].map(
+            {headerconp.map(
               (tab) => (
                 <button
                   key={tab.name}
                   onClick={() => setActiveTab(tab.name)}
-                  className={`px-2 py-2 rounded-full font-medium transition-all ${activeTab === tab.name ? "bg-red-600 text-white" : "bg-gray-200 hover:bg-gray-300"
-                    }`}
+                  // className={`px-2 py-2 rounded-full font-medium transition-all ${activeTab === tab.name ? "bg-red-600 text-white" : "bg-gray-200 hover:bg-gray-300"
+                  //   }`}
+                    
                 >
-                  <tab.icon />
+                  <div  className={`flex flex-col items-center px-2 py-1 rounded-lg transition ${
+                        activeTab === tab.name ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+                      }`}
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
+                     <tab.icon className="w-6 h-6 mb-1" />
+                      <span className="text-xs truncate">{tab.name}</span>
+                 </div>
                 </button>
+                
               )
             )}
+          
           </div>
+          
 
           {activeTab === "Flights" && (
             <div className="space-y-6">
@@ -1912,6 +1924,7 @@ function App() {
   return (
     <PackageProvider>
       <Router>
+        <ChatBot />
         <AppContent />
       </Router>
     </PackageProvider>

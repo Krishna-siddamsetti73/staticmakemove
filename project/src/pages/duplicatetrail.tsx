@@ -309,8 +309,8 @@ const handleSearch = (e: React.FormEvent) => {
       clearInterval(testimonialTimer);
     };
   }, [heroSlides.length, testimonials.length]);
-
-  const featuredPackages = packages.filter(pkg => pkg.featured).slice(0, 3);
+  const activePackages = packages.filter(pkg => pkg.status !== 'deleted');
+  const featuredPackages = activePackages.filter(pkg => pkg.featured).slice(0, 3);
 
   return (
     <div>

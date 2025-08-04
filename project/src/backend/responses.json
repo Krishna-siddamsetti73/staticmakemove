@@ -1,0 +1,79 @@
+{
+  "faqs": [
+    {
+      "intent": "working_hours",
+      "keywords": ["working hours" ,"office timing", "what time", "when open"],
+      "response": "Our working hours are from 9:00 AM to 6:00 PM, Monday to Saturday."
+    },
+    {
+      "intent": "services_offered",
+      "keywords": ["services", "what do you offer", "packages", "trips", "tours"],
+      "response": "We offer a variety of travel packages including domestic and international tours, adventure trips, and customized itineraries."
+    },
+    {
+      "intent": "booking_instructions",
+      "keywords": ["how to book", "booking instructions", "reservation steps", "book a trip"],
+      "response": "To book a trip, visit our website, select your desired package, and follow the booking instructions provided."
+    },
+    {
+      "intent": "travel_insurance",
+      "keywords": ["insurance", "travel insurance", "coverage", "protection"],
+      "response": "We recommend purchasing travel insurance for your trip. It covers unexpected events like trip cancellations or medical emergencies."
+    },
+        {
+      "intent": "contact_support",
+      "keywords": ["contact", "phone number", "call", "reach you", "support number"],
+      "response": "You can contact our support team at +91-9542226777 or email us at info@makeamove.co.in"
+    },
+    {
+      "intent": "cancellation_policy",
+      "keywords": ["cancel", "cancellation", "refund", "booking cancel", "money back"],
+      "response": "Cancellations made 7 days before travel are fully refundable. After that, charges may apply."
+    },
+    {
+      "intent": "payment_methods",
+      "keywords": ["payment", "pay", "upi", "debit card", "credit card", "netbanking"],
+      "response": "We accept UPI, debit/credit cards, net banking, and wallet payments."
+    },
+    {
+      "intent": "company_location",
+      "keywords": ["location", "office address", "where are you", "map", "head office"],
+      "response": "Our head office is located at 3rd Floor, BRK News, Banjara Hills, Rd.No.11, Hyderabad."
+    },
+    {
+      "intent": "booking_process",
+      "keywords": ["book", "how to book", "booking", "reservation", "trip book"],
+      "response": "To book a package, simply go to the 'Packages' section, choose your trip, and click on 'Book Now'."
+    },
+    {
+      "intent": "offers",
+      "keywords": ["discount", "offers", "promo", "coupon", "deal"],
+      "response": "We frequently run offers! Visit the 'Offers' section or subscribe to our newsletter to stay updated."
+    },
+    {
+      "intent": "support_hours",
+      "keywords": ["support hours", "support timing", "when support", "help time"],
+      "response": "Our customer support is available from 9:00 AM to 8:00 PM, Monday to Saturday."
+    },
+    {
+      "intent": "greetings",
+      "keywords": ["hello", "hi", "hey", "greetings", "good morning", "good evening", "good afternoon"],
+      "response": "Hello! How can I assist you today?"
+    },
+    {
+      "intent": "thank_you",
+      "keywords": ["thank you", "thanks", "appreciate", "grateful"],
+      "response": "You're welcome! If you have any more questions, feel free to ask."
+    },
+    {
+      "intent": "goodbye",
+      "keywords": ["bye", "goodbye", "see you", "take care"],
+      "response": "Goodbye! Have a great day!"
+    },
+    {
+      "intent": "about_us",
+      "keywords": ["about make a move", "who are you", "what ","what do you do", "company","information","company info"],
+      "response": "Make a Move is a travel agency specializing in personalized travel experiences. We aim to make your journey memorable and hassle-free."
+    }
+  ]
+}
